@@ -15,8 +15,8 @@ use windows::{
             DestroyPhysicalMonitors, GetNumberOfPhysicalMonitorsFromHMONITOR,
             GetPhysicalMonitorsFromHMONITOR, SetVCPFeature, PHYSICAL_MONITOR,
         },
-        Foundation::BOOL,
-        Graphics::Gdi::{EnumDisplayMonitors, HDC, HMONITOR, MONITORENUMPROC, RECT},
+        Foundation::{BOOL, RECT},
+        Graphics::Gdi::{EnumDisplayMonitors, HDC, HMONITOR},
     },
 };
 
@@ -47,7 +47,7 @@ impl MonitorBackend for WinBackend {
     fn set_vcp(&self, monitor_index: usize, code: u8, value: u16) -> Result<()> {
         self.with_monitor(monitor_index, |pm| {
             let ok = unsafe { SetVCPFeature(pm.hPhysicalMonitor, code, value as u32) };
-            if ok.is_ok() {
+            if ok != 0 {
                 Ok(())
             } else {
                 Err(BackendError::Ddc(format!(

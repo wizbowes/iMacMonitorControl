@@ -20,6 +20,9 @@ jobs:
             args: ''
             rust-targets: ''
 
+    permissions:
+      contents: write
+
     runs-on: ${{ matrix.platform }}
 
     steps:
