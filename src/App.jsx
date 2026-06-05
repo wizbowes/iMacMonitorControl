@@ -40,11 +40,9 @@ export default function App() {
 
   return (
     <div style={{
-      minHeight: '100vh',
       display: 'flex',
       alignItems: 'flex-start',
       justifyContent: 'center',
-      paddingTop: 8,
       background: 'transparent',
       fontFamily: '"Inter", -apple-system, "Helvetica Neue", Arial, sans-serif',
     }}>

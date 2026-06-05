@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Icons, MonitorTabs, Toast, PORTS } from './popup-shared.jsx';
 import { backend } from './bridge.js';
 
@@ -381,6 +381,25 @@ export function PopupStrip({ state, theme, themeChoice, setTheme, platform = 'ma
   const { press, mon, flash, sourceMenu, monitors, activeId, setActiveId, toast } = state;
   const [view,  setView]  = useState('controls');
   const [scope, setScope] = useState('monitor');
+  const cardRef = useRef(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('__TAURI__' in window)) return;
+    const card = cardRef.current;
+    if (!card) return;
+    const applySize = async (h) => {
+      const { getCurrentWebviewWindow } = await import('@tauri-apps/api/webviewWindow');
+      const { LogicalSize } = await import('@tauri-apps/api/window');
+      await getCurrentWebviewWindow().setSize(new LogicalSize(380, Math.ceil(h) + 10));
+    };
+    const observer = new ResizeObserver((entries) => {
+      const h = entries[0]?.contentRect.height;
+      if (h) applySize(h);
+    });
+    observer.observe(card);
+    applySize(card.getBoundingClientRect().height);
+    return () => observer.disconnect();
+  }, []);
 
   const ink          = dark ? '#f4f4f6' : '#1a1a1f';
   const muted        = dark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)';
@@ -408,7 +427,7 @@ export function PopupStrip({ state, theme, themeChoice, setTheme, platform = 'ma
   };
 
   return (
-    <div style={{
+    <div ref={cardRef} style={{
       width: 380, color: ink, background: surface,
       borderRadius: 13, overflow: 'hidden',
       backdropFilter: 'blur(30px) saturate(180%)', WebkitBackdropFilter: 'blur(30px) saturate(180%)',

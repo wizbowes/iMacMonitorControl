@@ -64,7 +64,7 @@ fn position_near_tray<R: Runtime>(app: &AppHandle<R>, window: &tauri::WebviewWin
     let tray_h    = rect.size.to_logical::<f64>(scale).height;
 
     let popup_w = 380.0_f64;
-    let popup_h = 300.0_f64;
+    let popup_h = 100.0_f64;
 
     let cx = tray_x + tray_w / 2.0;
     let x  = cx.sub(popup_w / 2.0).max(8.0).min(screen_w - popup_w - 8.0);

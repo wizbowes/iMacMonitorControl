@@ -15,7 +15,7 @@
         "label": "main",
         "title": "iMac Monitor Control",
         "width": 380,
-        "height": 300,
+        "height": 100,
         "resizable": false,
         "fullscreen": false,
         "decorations": false,
