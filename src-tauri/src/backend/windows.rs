@@ -15,7 +15,7 @@ use windows::{
             DestroyPhysicalMonitors, GetNumberOfPhysicalMonitorsFromHMONITOR,
             GetPhysicalMonitorsFromHMONITOR, SetVCPFeature, PHYSICAL_MONITOR,
         },
-        Foundation::{BOOL, RECT},
+        Foundation::{BOOL, LPARAM, RECT},
         Graphics::Gdi::{EnumDisplayMonitors, HDC, HMONITOR},
     },
 };
@@ -78,9 +78,9 @@ fn enum_hmonitors() -> Result<Vec<HMONITOR>> {
         hmon: HMONITOR,
         _hdc: HDC,
         _rect: *mut RECT,
-        lparam: isize,
+        lparam: LPARAM,
     ) -> BOOL {
-        let list = unsafe { &mut *(lparam as *mut Vec<HMONITOR>) };
+        let list = unsafe { &mut *(lparam.0 as *mut Vec<HMONITOR>) };
         list.push(hmon);
         BOOL(1)
     }
