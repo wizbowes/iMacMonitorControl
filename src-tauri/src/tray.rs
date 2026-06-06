@@ -1,8 +1,12 @@
+use std::sync::Once;
+
 use tauri::{
     image::Image,
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     AppHandle, Manager, Runtime,
 };
+
+static TRANSPARENCY_SET: Once = Once::new();
 
 pub fn setup_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let icon = load_tray_icon(app);
@@ -31,8 +35,12 @@ fn toggle_popup<R: Runtime>(app: &AppHandle<R>) {
         if window.is_visible().unwrap_or(false) {
             let _ = window.hide();
         } else {
-            // Snap to controls-view height before positioning so the window
-            // never flashes a larger size on screen.
+            // On first show, force WKWebView transparency (must happen after
+            // the webview has been displayed at least once internally).
+            #[cfg(target_os = "macos")]
+            TRANSPARENCY_SET.call_once(|| {
+                crate::make_webview_transparent(&window);
+            });
             let _ = window.set_size(tauri::LogicalSize::new(380.0_f64, 98.0_f64));
             position_near_tray(app, &window);
             let _ = window.show();

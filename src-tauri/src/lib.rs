@@ -13,6 +13,40 @@ pub struct AppState {
     pub active_monitor_index: Arc<AtomicUsize>,
 }
 
+/// Set the WKWebView to fully transparent.
+/// Must be called after the webview is initialised (i.e. after first show).
+#[cfg(target_os = "macos")]
+pub fn make_webview_transparent(window: &tauri::WebviewWindow<impl tauri::Runtime>) {
+    window.with_webview(|wv| {
+        unsafe {
+            use objc::{msg_send, sel, sel_impl};
+            use objc::runtime::{Class, Object};
+            use std::os::raw::c_char;
+
+            let view = wv.inner() as *mut Object;
+
+            // 1. Standard NSView opacity
+            let () = msg_send![view, setOpaque: false];
+
+            // 2. NSView background colour → clear
+            let ns_color = Class::get("NSColor").unwrap();
+            let clear: *mut Object = msg_send![ns_color, clearColor];
+            let () = msg_send![view, setBackgroundColor: clear];
+
+            // 3. WKWebView-specific: disable its own background drawing
+            //    (needed on macOS Sequoia+)
+            let ns_number = Class::get("NSNumber").unwrap();
+            let no: *mut Object = msg_send![ns_number, numberWithBool: false];
+            let ns_string = Class::get("NSString").unwrap();
+            let key: *mut Object = msg_send![
+                ns_string,
+                stringWithUTF8String: b"drawsBackground\0".as_ptr() as *const c_char
+            ];
+            let () = msg_send![view, setValue: no forKey: key];
+        }
+    }).ok();
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -36,19 +70,6 @@ pub fn run() {
         ])
         .setup(|app| {
             tray::setup_tray(&app.handle())?;
-            if let Some(window) = app.get_webview_window("main") {
-                #[cfg(target_os = "macos")]
-                window.with_webview(|wv| {
-                    unsafe {
-                        use objc::{msg_send, sel, sel_impl};
-                        let view = wv.inner() as *mut objc::runtime::Object;
-                        let () = msg_send![view, setOpaque: false];
-                        let cls = objc::runtime::Class::get("NSColor").unwrap();
-                        let clear: *mut objc::runtime::Object = msg_send![cls, clearColor];
-                        let () = msg_send![view, setBackgroundColor: clear];
-                    }
-                }).ok();
-            }
             Ok(())
         })
         .on_window_event(|window, event| {
