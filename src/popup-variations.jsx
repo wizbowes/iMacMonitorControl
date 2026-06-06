@@ -384,16 +384,14 @@ export function PopupStrip({ state, theme, themeChoice, setTheme, platform = 'ma
   const cardRef = useRef(null);
 
   useEffect(() => {
-    const card = cardRef.current;
-    if (!card) return;
-    const observer = new ResizeObserver((entries) => {
-      const h = entries[0]?.contentRect.height;
-      if (h) backend.resizeWindow(Math.ceil(h) + 2);
-    });
-    observer.observe(card);
-    backend.resizeWindow(Math.ceil(card.getBoundingClientRect().height) + 2);
-    return () => observer.disconnect();
-  }, []);
+    if (view === 'settings') {
+      backend.resizeWindow(320);
+    } else if (sourceMenu) {
+      backend.resizeWindow(290);
+    } else {
+      backend.resizeWindow(98);
+    }
+  }, [view, sourceMenu]);
 
   const ink          = dark ? '#f4f4f6' : '#1a1a1f';
   const muted        = dark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)';
