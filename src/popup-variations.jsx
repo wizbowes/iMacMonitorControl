@@ -459,7 +459,12 @@ export function PopupStrip({ state, theme, themeChoice, setTheme, platform = 'ma
           </span>
         )}
         <button
-          onClick={() => { setView(view === 'controls' ? 'settings' : 'controls'); state.setSourceMenu(false); }}
+          onClick={() => {
+            const next = view === 'controls' ? 'settings' : 'controls';
+            backend.resizeWindow(next === 'settings' ? 320 : 98);
+            setView(next);
+            state.setSourceMenu(false);
+          }}
           title={view === 'controls' ? 'Settings' : 'Done'}
           style={{
             width: 26, height: 26, flexShrink: 0, padding: 0, borderRadius: 6, border: 'none',

@@ -36,6 +36,11 @@ pub fn run() {
         ])
         .setup(|app| {
             tray::setup_tray(&app.handle())?;
+            // Force WKWebView background transparent so the window chrome
+            // doesn't show white behind the popup card.
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_background_color(Some(tauri::Color(0, 0, 0, 0)));
+            }
             Ok(())
         })
         .on_window_event(|window, event| {
