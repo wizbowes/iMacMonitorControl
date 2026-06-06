@@ -41,9 +41,8 @@ pub fn run() {
                 window.with_webview(|wv| {
                     unsafe {
                         use objc::{msg_send, sel, sel_impl};
-                        let view = wv.inner();
-                        let no: objc::runtime::BOOL = 0;
-                        let () = msg_send![view, setOpaque: no];
+                        let view = wv.inner() as *mut objc::runtime::Object;
+                        let () = msg_send![view, setOpaque: false];
                         let cls = objc::runtime::Class::get("NSColor").unwrap();
                         let clear: *mut objc::runtime::Object = msg_send![cls, clearColor];
                         let () = msg_send![view, setBackgroundColor: clear];
