@@ -37,9 +37,6 @@ pub fn run() {
         .setup(|app| {
             tray::setup_tray(&app.handle())?;
             if let Some(window) = app.get_webview_window("main") {
-                // set_background_color handles NSWindow; we also need to make
-                // the WKWebView itself non-opaque so it doesn't paint white.
-                let _ = window.set_background_color(Some(tauri::Color(0, 0, 0, 0)));
                 #[cfg(target_os = "macos")]
                 window.with_webview(|wv| {
                     unsafe {
