@@ -25,4 +25,5 @@ export const backend = {
   setActiveIndex:(index) => invoke('cmd_set_active_index', { index }),
   loadConfig:    ()      => invoke('cmd_load_config'),
   saveConfig:    (config)=> invoke('cmd_save_config',    { config }),
+  resizeWindow:  (height)=> invoke('cmd_resize_window',  { height }),
 };

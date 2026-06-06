@@ -114,3 +114,9 @@ pub fn cmd_load_config() -> CmdResult<AppConfig> {
 pub fn cmd_save_config(config: AppConfig) -> CmdResult {
     config::save(&config).map_err(CmdError)
 }
+
+#[tauri::command]
+pub fn cmd_resize_window(window: tauri::WebviewWindow, height: u32) -> CmdResult {
+    window.set_size(tauri::LogicalSize::new(380.0_f64, height as f64))?;
+    Ok(())
+}

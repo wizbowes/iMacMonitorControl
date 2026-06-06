@@ -384,20 +384,14 @@ export function PopupStrip({ state, theme, themeChoice, setTheme, platform = 'ma
   const cardRef = useRef(null);
 
   useEffect(() => {
-    if (typeof window === 'undefined' || !('__TAURI__' in window)) return;
     const card = cardRef.current;
     if (!card) return;
-    const applySize = async (h) => {
-      const { getCurrentWebviewWindow } = await import('@tauri-apps/api/webviewWindow');
-      const { LogicalSize } = await import('@tauri-apps/api/dpi');
-      await getCurrentWebviewWindow().setSize(new LogicalSize(380, Math.ceil(h) + 10));
-    };
     const observer = new ResizeObserver((entries) => {
       const h = entries[0]?.contentRect.height;
-      if (h) applySize(h);
+      if (h) backend.resizeWindow(Math.ceil(h) + 2);
     });
     observer.observe(card);
-    applySize(card.getBoundingClientRect().height);
+    backend.resizeWindow(Math.ceil(card.getBoundingClientRect().height) + 2);
     return () => observer.disconnect();
   }, []);
 

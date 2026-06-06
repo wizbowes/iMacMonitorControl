@@ -32,6 +32,7 @@ pub fn run() {
             commands::cmd_set_active_index,
             commands::cmd_load_config,
             commands::cmd_save_config,
+            commands::cmd_resize_window,
         ])
         .setup(|app| {
             tray::setup_tray(&app.handle())?;
