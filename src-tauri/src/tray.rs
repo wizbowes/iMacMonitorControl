@@ -31,6 +31,9 @@ fn toggle_popup<R: Runtime>(app: &AppHandle<R>) {
         if window.is_visible().unwrap_or(false) {
             let _ = window.hide();
         } else {
+            // Snap to controls-view height before positioning so the window
+            // never flashes a larger size on screen.
+            let _ = window.set_size(tauri::LogicalSize::new(380.0_f64, 98.0_f64));
             position_near_tray(app, &window);
             let _ = window.show();
             let _ = window.set_focus();
