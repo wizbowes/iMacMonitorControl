@@ -35,3 +35,4 @@ windows = { version = "0.58", features = [
 
 [target.'cfg(target_os = "macos")'.dependencies]
 # m1ddc / IOKit access is via shell plugin (subprocess); no extra crate needed.
+objc = "0.2"

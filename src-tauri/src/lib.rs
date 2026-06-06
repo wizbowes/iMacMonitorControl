@@ -36,10 +36,22 @@ pub fn run() {
         ])
         .setup(|app| {
             tray::setup_tray(&app.handle())?;
-            // Force WKWebView background transparent so the window chrome
-            // doesn't show white behind the popup card.
             if let Some(window) = app.get_webview_window("main") {
+                // set_background_color handles NSWindow; we also need to make
+                // the WKWebView itself non-opaque so it doesn't paint white.
                 let _ = window.set_background_color(Some(tauri::Color(0, 0, 0, 0)));
+                #[cfg(target_os = "macos")]
+                window.with_webview(|wv| {
+                    unsafe {
+                        use objc::{msg_send, sel, sel_impl};
+                        let view = wv.inner();
+                        let no: objc::runtime::BOOL = 0;
+                        let () = msg_send![view, setOpaque: no];
+                        let cls = objc::runtime::Class::get("NSColor").unwrap();
+                        let clear: *mut objc::runtime::Object = msg_send![cls, clearColor];
+                        let () = msg_send![view, setBackgroundColor: clear];
+                    }
+                }).ok();
             }
             Ok(())
         })
