@@ -3,7 +3,7 @@ import { useMonitorState } from './popup-shared.jsx';
 import { PopupStrip } from './popup-variations.jsx';
 
 function detectPlatform() {
-  if (typeof window !== 'undefined' && '__TAURI__' in window) {
+  if (typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window)) {
     const ua = navigator.userAgent.toLowerCase();
     if (ua.includes('windows')) return 'windows';
     if (ua.includes('mac'))     return 'mac';

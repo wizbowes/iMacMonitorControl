@@ -115,8 +115,18 @@ pub fn cmd_save_config(config: AppConfig) -> CmdResult {
     config::save(&config).map_err(CmdError)
 }
 
+/// Resize the popup to fit its content (called by the frontend whenever the
+/// rendered card changes height), then re-anchor it to the tray icon so it
+/// grows downward from the menubar on macOS and upward from the taskbar on
+/// Windows.
 #[tauri::command]
-pub fn cmd_resize_window(window: tauri::WebviewWindow, height: u32) -> CmdResult {
-    window.set_size(tauri::LogicalSize::new(380.0_f64, height as f64))?;
+pub fn cmd_resize_window(
+    app: tauri::AppHandle,
+    window: tauri::WebviewWindow,
+    width: f64,
+    height: f64,
+) -> CmdResult {
+    window.set_size(tauri::LogicalSize::new(width, height))?;
+    crate::tray::position_near_tray(&app, &window, width, height);
     Ok(())
 }

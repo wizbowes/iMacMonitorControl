@@ -1,12 +1,8 @@
-use std::sync::Once;
-
 use tauri::{
     image::Image,
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     AppHandle, Manager, Runtime,
 };
-
-static TRANSPARENCY_SET: Once = Once::new();
 
 pub fn setup_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let icon = load_tray_icon(app);
@@ -35,31 +31,50 @@ fn toggle_popup<R: Runtime>(app: &AppHandle<R>) {
         if window.is_visible().unwrap_or(false) {
             let _ = window.hide();
         } else {
-            // On first show, force WKWebView transparency (must happen after
-            // the webview has been displayed at least once internally).
-            #[cfg(target_os = "macos")]
-            TRANSPARENCY_SET.call_once(|| {
-                crate::make_webview_transparent(&window);
-            });
-            let _ = window.set_size(tauri::LogicalSize::new(380.0_f64, 98.0_f64));
-            position_near_tray(app, &window);
+            // The frontend keeps the window sized to its content via
+            // cmd_resize_window; just anchor it to the tray and show.
+            let (w, h) = logical_size(&window);
+            position_near_tray(app, &window, w, h);
             let _ = window.show();
             let _ = window.set_focus();
         }
     }
 }
 
-fn position_near_tray<R: Runtime>(app: &AppHandle<R>, window: &tauri::WebviewWindow<R>) {
-    let Some(tray) = app.tray_by_id("main") else { return };
-    let Ok(Some(rect)) = tray.rect() else { return };
-
-    // Scale factor for converting physical ↔ logical coordinates.
-    let scale = window
+fn scale_factor<R: Runtime>(window: &tauri::WebviewWindow<R>) -> f64 {
+    window
         .current_monitor()
         .ok()
         .flatten()
         .map(|m| m.scale_factor())
-        .unwrap_or(1.0);
+        .unwrap_or(1.0)
+}
+
+fn logical_size<R: Runtime>(window: &tauri::WebviewWindow<R>) -> (f64, f64) {
+    let scale = scale_factor(window);
+    window
+        .outer_size()
+        .map(|s| {
+            let s = s.to_logical::<f64>(scale);
+            (s.width, s.height)
+        })
+        .unwrap_or((412.0, 150.0))
+}
+
+/// Anchor the popup to the tray icon: hanging below the menubar icon on
+/// macOS, floating above the taskbar icon on Windows/Linux. `popup_w`/`popup_h`
+/// are the window's logical dimensions (passed in because a just-requested
+/// resize may not be reflected by `outer_size()` yet).
+pub fn position_near_tray<R: Runtime>(
+    app: &AppHandle<R>,
+    window: &tauri::WebviewWindow<R>,
+    popup_w: f64,
+    popup_h: f64,
+) {
+    let Some(tray) = app.tray_by_id("main") else { return };
+    let Ok(Some(rect)) = tray.rect() else { return };
+
+    let scale = scale_factor(window);
 
     let screen_w = window
         .current_monitor()
@@ -68,25 +83,19 @@ fn position_near_tray<R: Runtime>(app: &AppHandle<R>, window: &tauri::WebviewWin
         .map(|m| m.size().to_logical::<f64>(scale).width)
         .unwrap_or(1920.0);
 
-    // Convert tray rect to logical pixels.
-    let tray_x    = rect.position.to_logical::<f64>(scale).x;
-    let tray_y    = rect.position.to_logical::<f64>(scale).y;
-    let tray_w    = rect.size.to_logical::<f64>(scale).width;
-    let tray_h    = rect.size.to_logical::<f64>(scale).height;
+    let tray_pos  = rect.position.to_logical::<f64>(scale);
+    let tray_size = rect.size.to_logical::<f64>(scale);
 
-    let popup_w = 380.0_f64;
-    let popup_h = 100.0_f64;
+    let cx = tray_pos.x + tray_size.width / 2.0;
+    let x  = (cx - popup_w / 2.0).max(8.0).min(screen_w - popup_w - 8.0);
 
-    let cx = tray_x + tray_w / 2.0;
-    let x  = cx.sub(popup_w / 2.0).max(8.0).min(screen_w - popup_w - 8.0);
-
-    // macOS: popup hangs below the menubar icon.
-    // Windows/Linux: popup floats above the taskbar icon.
-    #[cfg(target_os = "macos")]
-    let y = tray_y + tray_h + 6.0;
-
-    #[cfg(not(target_os = "macos"))]
-    let y = tray_y - popup_h - 8.0;
+    // The window already carries transparent padding around the card (for its
+    // drop shadow), so no extra gap is needed here.
+    let y = if cfg!(target_os = "macos") {
+        tray_pos.y + tray_size.height
+    } else {
+        tray_pos.y - popup_h
+    };
 
     let _ = window.set_position(tauri::LogicalPosition::new(x, y));
 }
@@ -95,12 +104,4 @@ fn load_tray_icon<R: Runtime>(app: &AppHandle<R>) -> Image<'static> {
     app.default_window_icon()
         .map(|img| img.clone().to_owned())
         .unwrap_or_else(|| Image::new_owned(vec![], 0, 0))
-}
-
-// Helper trait to subtract without needing a temporary binding.
-trait Sub: Sized {
-    fn sub(self, rhs: Self) -> Self;
-}
-impl Sub for f64 {
-    fn sub(self, rhs: f64) -> f64 { self - rhs }
 }

@@ -2,6 +2,14 @@ import { useState, useRef, useEffect } from 'react';
 import { Icons, MonitorTabs, Toast, PORTS } from './popup-shared.jsx';
 import { backend } from './bridge.js';
 
+// Window geometry: the card is CARD_W wide; the native window adds transparent
+// padding around it so the drop shadow and the toast (which hangs below the
+// card) aren't clipped. Keep in sync with the initial size in tauri.conf.json.
+const CARD_W     = 380;
+const PAD_X      = 16;
+const PAD_TOP    = 8;
+const PAD_BOTTOM = 44;
+
 // ─── State pill ───────────────────────────────────────────────────────────────
 function StatePill({ on, dark }) {
   const onColor = '#3ddc8e';
@@ -218,7 +226,7 @@ function SettingsView({ state, theme, themeChoice, setTheme, scope, setScope, pl
   return (
     <div style={{ color: ink, animation: 'mc-view-in 160ms ease-out' }}>
       <ScopeSwitch />
-      <div className="mc-settings-scroll" style={{ maxHeight: 420, overflowY: 'auto' }}>
+      <div className="mc-settings-scroll" style={{ maxHeight: 520, overflowY: 'auto' }}>
         {scope === 'monitor' && monitors.length > 1 && (
           <div style={{ padding: '10px 12px 0' }}>
             <MonitorTabs monitors={monitors} activeId={activeId} onChange={state.setActiveId} theme={theme} />
@@ -383,15 +391,23 @@ export function PopupStrip({ state, theme, themeChoice, setTheme, platform = 'ma
   const [scope, setScope] = useState('monitor');
   const cardRef = useRef(null);
 
+  // Keep the native window sized to the rendered card. ResizeObserver fires on
+  // mount and whenever the card's height changes (settings open/close, source
+  // menu, monitor list growth, …).
   useEffect(() => {
-    if (view === 'settings') {
-      backend.resizeWindow(320);
-    } else if (sourceMenu) {
-      backend.resizeWindow(290);
-    } else {
-      backend.resizeWindow(98);
-    }
-  }, [view, sourceMenu]);
+    const el = cardRef.current;
+    if (!el) return;
+    let lastH = 0;
+    const ro = new ResizeObserver(() => {
+      const h = Math.ceil(el.getBoundingClientRect().height);
+      if (h > 0 && h !== lastH) {
+        lastH = h;
+        backend.resizeWindow(CARD_W + PAD_X * 2, h + PAD_TOP + PAD_BOTTOM);
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const ink          = dark ? '#f4f4f6' : '#1a1a1f';
   const muted        = dark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)';
@@ -419,8 +435,9 @@ export function PopupStrip({ state, theme, themeChoice, setTheme, platform = 'ma
   };
 
   return (
+    <div style={{ padding: `${PAD_TOP}px ${PAD_X}px ${PAD_BOTTOM}px` }}>
     <div ref={cardRef} style={{
-      width: 380, color: ink, background: surface,
+      width: CARD_W, color: ink, background: surface,
       borderRadius: 13, overflow: 'hidden',
       backdropFilter: 'blur(30px) saturate(180%)', WebkitBackdropFilter: 'blur(30px) saturate(180%)',
       boxShadow: '0 14px 38px rgba(0,0,0,0.28), 0 0 0 0.5px rgba(0,0,0,0.06)',
@@ -460,9 +477,7 @@ export function PopupStrip({ state, theme, themeChoice, setTheme, platform = 'ma
         )}
         <button
           onClick={() => {
-            const next = view === 'controls' ? 'settings' : 'controls';
-            backend.resizeWindow(next === 'settings' ? 320 : 98);
-            setView(next);
+            setView(view === 'controls' ? 'settings' : 'controls');
             state.setSourceMenu(false);
           }}
           title={view === 'controls' ? 'Settings' : 'Done'}
@@ -510,6 +525,7 @@ export function PopupStrip({ state, theme, themeChoice, setTheme, platform = 'ma
         />
       )}
       <Toast toast={toast} theme={theme} />
+    </div>
     </div>
   );
 }

@@ -10,12 +10,13 @@
     "beforeBuildCommand": "npm run build"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
         "label": "main",
         "title": "iMac Monitor Control",
-        "width": 380,
-        "height": 100,
+        "width": 412,
+        "height": 150,
         "resizable": false,
         "fullscreen": false,
         "decorations": false,

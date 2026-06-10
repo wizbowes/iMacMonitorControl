@@ -4,7 +4,11 @@
  * In production (Tauri webview), calls go through to Rust via invoke().
  */
 
-const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
+// __TAURI_INTERNALS__ is always injected by Tauri v2; __TAURI__ only exists
+// when withGlobalTauri is enabled, so it must not be the only check.
+const isTauri =
+  typeof window !== 'undefined' &&
+  ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
 
 async function invoke(cmd, args = {}) {
   if (isTauri) {
@@ -25,5 +29,5 @@ export const backend = {
   setActiveIndex:(index) => invoke('cmd_set_active_index', { index }),
   loadConfig:    ()      => invoke('cmd_load_config'),
   saveConfig:    (config)=> invoke('cmd_save_config',    { config }),
-  resizeWindow:  (height)=> invoke('cmd_resize_window',  { height }),
+  resizeWindow:  (width, height) => invoke('cmd_resize_window', { width, height }),
 };

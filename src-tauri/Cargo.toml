@@ -15,7 +15,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2.6.2", features = [] }
 
 [dependencies]
-tauri            = { version = "2.11.2", features = ["tray-icon", "image-png"] }
+tauri            = { version = "2.11.2", features = ["tray-icon", "image-png", "macos-private-api"] }
 tauri-plugin-log = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-global-shortcut = "2"
@@ -33,6 +33,4 @@ windows = { version = "0.58", features = [
   "Win32_Graphics_Gdi",
 ] }
 
-[target.'cfg(target_os = "macos")'.dependencies]
-# m1ddc / IOKit access is via shell plugin (subprocess); no extra crate needed.
-objc = "0.2"
+# macOS: m1ddc / IOKit access is via shell plugin (subprocess); no extra crate needed.
