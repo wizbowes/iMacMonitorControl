@@ -6,7 +6,7 @@ mod tray;
 use std::sync::{atomic::AtomicUsize, Arc};
 
 use backend::PlatformBackend;
-use tauri::WindowEvent;
+use tauri::{Manager, WindowEvent};
 
 pub struct AppState {
     pub backend:              Arc<dyn backend::MonitorBackend>,
@@ -36,6 +36,11 @@ pub fn run() {
         ])
         .setup(|app| {
             tray::setup_tray(&app.handle())?;
+            // Re-assert no native shadow: the config flag alone has been seen
+            // to leave the macOS 26 glass rim around the borderless window.
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_shadow(false);
+            }
             Ok(())
         })
         .on_window_event(|window, event| {

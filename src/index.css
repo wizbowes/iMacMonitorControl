@@ -12,6 +12,13 @@ html, body {
   -webkit-user-select: none;
 }
 
+/* Inputs must opt back in: WKWebView mishandles caret/focus inside
+   non-selectable ancestors (typing breaks after the first character). */
+input, textarea {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
 #root {
   width: 100%;
   min-height: 100vh;

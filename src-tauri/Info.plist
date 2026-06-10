@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Opt out of the macOS 26 (Tahoe) Liquid Glass redesign, which draws a
+       rounded glass frame/rim around the whole borderless popup window. -->
+  <key>UIDesignRequiresCompatibility</key>
+  <true/>
+</dict>
+</plist>

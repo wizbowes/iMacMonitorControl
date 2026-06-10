@@ -125,6 +125,7 @@ const Input = ({ c, value, onChange, placeholder, mono }) => (
   <input
     value={value || ''} onChange={(e) => onChange(e.target.value)}
     placeholder={placeholder} spellCheck={false}
+    autoCorrect="off" autoCapitalize="off" autoComplete="off"
     style={{
       flex: 1, minWidth: 0, padding: '5px 9px', borderRadius: 6,
       background: c.fieldBg, border: `1px solid ${c.fieldBorder}`,
@@ -412,7 +413,7 @@ function SettingsView({ state, theme, themeChoice, setTheme, scope, setScope, pl
           </span>
           <div style={{ flex: 1, lineHeight: 1.3 }}>
             <div style={{ fontSize: 11.5, fontWeight: 600 }}>iMac Monitor Control</div>
-            <div style={{ fontSize: 10.5, color: muted, fontFamily: '"JetBrains Mono", monospace' }}>v1.0.0 · DDC/CI</div>
+            <div style={{ fontSize: 10.5, color: muted, fontFamily: '"JetBrains Mono", monospace' }}>v1.1.0 · DDC/CI</div>
           </div>
         </div>
       </div>
