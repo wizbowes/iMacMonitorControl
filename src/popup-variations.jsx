@@ -79,63 +79,136 @@ function SourceMenu({ state, theme }) {
   );
 }
 
+// ─── Shared building blocks ───────────────────────────────────────────────────
+// These live at module scope — NOT inside render functions. Defining them
+// inline would create a new component type on every render, making React
+// remount their DOM nodes: inputs would lose focus after each keystroke and
+// buttons would swallow rapid clicks (the pressed node is replaced before
+// mouse-up, so no click event fires).
+
+function palette(dark) {
+  return {
+    dark,
+    ink:         dark ? '#f4f4f6' : '#1a1a1f',
+    muted:       dark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.55)',
+    fieldBg:     dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)',
+    fieldBorder: dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+    rowBorder:   dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)',
+  };
+}
+
+const SectionHead = ({ c, children, hint }) => (
+  <div style={{ padding: '14px 14px 6px', display: 'flex', alignItems: 'baseline', gap: 8 }}>
+    <span style={{ fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '0.14em', fontWeight: 700, color: c.muted }}>{children}</span>
+    {hint && <span style={{ fontSize: 10, color: c.muted, fontStyle: 'italic' }}>{hint}</span>}
+  </div>
+);
+
+const Field = ({ c, label, mono, children, last }) => (
+  <div style={{
+    padding: '9px 14px', borderBottom: last ? 'none' : `1px solid ${c.rowBorder}`,
+    display: 'flex', alignItems: 'center', gap: 10,
+  }}>
+    {label && (
+      <span style={{
+        fontSize: 11.5, minWidth: 110, color: c.ink,
+        fontFamily: mono ? '"JetBrains Mono", ui-monospace, monospace' : 'inherit',
+      }}>{label}</span>
+    )}
+    <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6, minWidth: 0 }}>
+      {children}
+    </div>
+  </div>
+);
+
+const Input = ({ c, value, onChange, placeholder, mono }) => (
+  <input
+    value={value || ''} onChange={(e) => onChange(e.target.value)}
+    placeholder={placeholder} spellCheck={false}
+    style={{
+      flex: 1, minWidth: 0, padding: '5px 9px', borderRadius: 6,
+      background: c.fieldBg, border: `1px solid ${c.fieldBorder}`,
+      color: c.ink,
+      fontFamily: mono ? '"JetBrains Mono", ui-monospace, monospace' : 'inherit',
+      fontSize: 11.5, outline: 'none', textAlign: 'left',
+    }}
+    onFocus={(e) => e.currentTarget.style.borderColor = '#0a84ff'}
+    onBlur={(e) => e.currentTarget.style.borderColor = c.fieldBorder}
+  />
+);
+
+const Kbd = ({ c, children }) => (
+  <kbd style={{
+    padding: '2px 6px', borderRadius: 5,
+    background: c.fieldBg, border: `1px solid ${c.fieldBorder}`,
+    color: c.ink, fontFamily: '"JetBrains Mono", ui-monospace, monospace',
+    fontSize: 10.5, fontWeight: 600,
+  }}>{children}</kbd>
+);
+
+const Toggle = ({ c, on, onToggle }) => (
+  <button onClick={() => onToggle(!on)} style={{
+    width: 32, height: 19, borderRadius: 999, border: 'none',
+    background: on ? '#3ddc8e' : (c.dark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.18)'),
+    position: 'relative', cursor: 'pointer', transition: 'background 150ms ease',
+  }}>
+    <span style={{
+      position: 'absolute', top: 2, left: on ? 15 : 2,
+      width: 15, height: 15, borderRadius: '50%', background: '#fff',
+      boxShadow: '0 1px 2px rgba(0,0,0,0.25)', transition: 'left 150ms ease',
+    }} />
+  </button>
+);
+
+const ScopeSwitch = ({ c, scope, setScope }) => (
+  <div style={{
+    display: 'flex', gap: 2, padding: 2, margin: '10px 12px 0',
+    background: c.dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)', borderRadius: 8,
+  }}>
+    {[{ value: 'monitor', label: 'Monitor' }, { value: 'app', label: 'Application' }].map((opt) => {
+      const on = scope === opt.value;
+      return (
+        <button key={opt.value} onClick={() => setScope(opt.value)} style={{
+          flex: 1, padding: '5px 10px', border: 'none', cursor: 'pointer', borderRadius: 6,
+          background: on ? (c.dark ? 'rgba(255,255,255,0.14)' : '#fff') : 'transparent',
+          color: on ? (c.dark ? '#fff' : '#1a1a1f') : (c.dark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.5)'),
+          boxShadow: on ? '0 1px 2px rgba(0,0,0,0.08)' : 'none', transition: 'all 120ms ease',
+          fontFamily: 'inherit', fontSize: 11, fontWeight: 600, letterSpacing: '0.005em',
+        }}>{opt.label}</button>
+      );
+    })}
+  </div>
+);
+
+// Control cell: fires on pointer-down so rapid presses register individually
+// and feel like a hardware button. Keyboard activation still arrives as a
+// click event with detail === 0.
+function Cell({ dark, ink, pressed, danger, label, onPress, children }) {
+  return (
+    <button
+      onPointerDown={onPress}
+      onClick={(e) => { if (e.detail === 0) onPress(); }}
+      style={{
+        flex: 1, height: 52, border: 'none', cursor: 'pointer',
+        background: pressed
+          ? (danger ? 'rgba(255,69,58,0.18)' : (dark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)'))
+          : 'transparent',
+        color: danger ? '#ff5b54' : ink,
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3,
+        fontFamily: 'inherit', fontSize: 9.5, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase',
+        borderRight: `1px solid ${dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}`,
+        transition: 'background 120ms ease',
+      }}>
+      {children}
+      <span>{label}</span>
+    </button>
+  );
+}
+
 // ─── Settings view ────────────────────────────────────────────────────────────
 function SettingsView({ state, theme, themeChoice, setTheme, scope, setScope, platform = 'mac' }) {
-  const dark        = theme === 'dark';
-  const ink         = dark ? '#f4f4f6' : '#1a1a1f';
-  const muted       = dark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.55)';
-  const fieldBg     = dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)';
-  const fieldBorder = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
-  const rowBorder   = dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)';
-
-  const SectionHead = ({ children, hint }) => (
-    <div style={{ padding: '14px 14px 6px', display: 'flex', alignItems: 'baseline', gap: 8 }}>
-      <span style={{ fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '0.14em', fontWeight: 700, color: muted }}>{children}</span>
-      {hint && <span style={{ fontSize: 10, color: muted, fontStyle: 'italic' }}>{hint}</span>}
-    </div>
-  );
-
-  const Field = ({ label, mono, children, last }) => (
-    <div style={{
-      padding: '9px 14px', borderBottom: last ? 'none' : `1px solid ${rowBorder}`,
-      display: 'flex', alignItems: 'center', gap: 10,
-    }}>
-      {label && (
-        <span style={{
-          fontSize: 11.5, minWidth: 110, color: ink,
-          fontFamily: mono ? '"JetBrains Mono", ui-monospace, monospace' : 'inherit',
-        }}>{label}</span>
-      )}
-      <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6, minWidth: 0 }}>
-        {children}
-      </div>
-    </div>
-  );
-
-  const Input = ({ value, onChange, placeholder, mono }) => (
-    <input
-      value={value || ''} onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder} spellCheck={false}
-      style={{
-        flex: 1, minWidth: 0, padding: '5px 9px', borderRadius: 6,
-        background: fieldBg, border: `1px solid ${fieldBorder}`,
-        color: ink,
-        fontFamily: mono ? '"JetBrains Mono", ui-monospace, monospace' : 'inherit',
-        fontSize: 11.5, outline: 'none', textAlign: 'left',
-      }}
-      onFocus={(e) => e.currentTarget.style.borderColor = '#0a84ff'}
-      onBlur={(e) => e.currentTarget.style.borderColor = fieldBorder}
-    />
-  );
-
-  const Kbd = ({ children }) => (
-    <kbd style={{
-      padding: '2px 6px', borderRadius: 5,
-      background: fieldBg, border: `1px solid ${fieldBorder}`,
-      color: ink, fontFamily: '"JetBrains Mono", ui-monospace, monospace',
-      fontSize: 10.5, fontWeight: 600,
-    }}>{children}</kbd>
-  );
+  const c = palette(theme === 'dark');
+  const { dark, ink, muted, fieldBg, fieldBorder, rowBorder } = c;
 
   const [launchAtLogin, setLaunchAtLogin] = useState(true);
   const [showInTray,    setShowInTray]    = useState(true);
@@ -184,48 +257,14 @@ function SettingsView({ state, theme, themeChoice, setTheme, scope, setScope, pl
     reader.readAsText(file);
   };
 
-  const Toggle = ({ on, onToggle }) => (
-    <button onClick={() => onToggle(!on)} style={{
-      width: 32, height: 19, borderRadius: 999, border: 'none',
-      background: on ? '#3ddc8e' : (dark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.18)'),
-      position: 'relative', cursor: 'pointer', transition: 'background 150ms ease',
-    }}>
-      <span style={{
-        position: 'absolute', top: 2, left: on ? 15 : 2,
-        width: 15, height: 15, borderRadius: '50%', background: '#fff',
-        boxShadow: '0 1px 2px rgba(0,0,0,0.25)', transition: 'left 150ms ease',
-      }} />
-    </button>
-  );
-
   const showInLabel = ({ mac: 'Show in menu bar', windows: 'Show in taskbar', linux: 'Show in system tray' })[platform] || 'Show in menu bar';
 
   const { mon, monitors, activeId } = state;
   const canRemove = monitors.length > 1;
 
-  const ScopeSwitch = () => (
-    <div style={{
-      display: 'flex', gap: 2, padding: 2, margin: '10px 12px 0',
-      background: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)', borderRadius: 8,
-    }}>
-      {[{ value: 'monitor', label: 'Monitor' }, { value: 'app', label: 'Application' }].map((opt) => {
-        const on = scope === opt.value;
-        return (
-          <button key={opt.value} onClick={() => setScope(opt.value)} style={{
-            flex: 1, padding: '5px 10px', border: 'none', cursor: 'pointer', borderRadius: 6,
-            background: on ? (dark ? 'rgba(255,255,255,0.14)' : '#fff') : 'transparent',
-            color: on ? (dark ? '#fff' : '#1a1a1f') : (dark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.5)'),
-            boxShadow: on ? '0 1px 2px rgba(0,0,0,0.08)' : 'none', transition: 'all 120ms ease',
-            fontFamily: 'inherit', fontSize: 11, fontWeight: 600, letterSpacing: '0.005em',
-          }}>{opt.label}</button>
-        );
-      })}
-    </div>
-  );
-
   return (
     <div style={{ color: ink, animation: 'mc-view-in 160ms ease-out' }}>
-      <ScopeSwitch />
+      <ScopeSwitch c={c} scope={scope} setScope={setScope} />
       <div className="mc-settings-scroll" style={{ maxHeight: 520, overflowY: 'auto' }}>
         {scope === 'monitor' && monitors.length > 1 && (
           <div style={{ padding: '10px 12px 0' }}>
@@ -234,21 +273,21 @@ function SettingsView({ state, theme, themeChoice, setTheme, scope, setScope, pl
         )}
         {scope === 'monitor' ? (
           <>
-            <SectionHead hint={mon.name}>Display</SectionHead>
+            <SectionHead c={c} hint={mon.name}>Display</SectionHead>
             <div style={{ padding: '0 4px' }}>
-              <Field label="Name">
-                <Input value={mon.name} onChange={(v) => state.updateMonitor(mon.id, { name: v })} placeholder="Display name" />
+              <Field c={c} label="Name">
+                <Input c={c} value={mon.name} onChange={(v) => state.updateMonitor(mon.id, { name: v })} placeholder="Display name" />
               </Field>
-              <Field label="IP address" last>
-                <Input value={mon.ip} onChange={(v) => state.updateMonitor(mon.id, { ip: v })} placeholder="192.168.1.21" mono />
+              <Field c={c} label="IP address" last>
+                <Input c={c} value={mon.ip} onChange={(v) => state.updateMonitor(mon.id, { ip: v })} placeholder="192.168.1.21" mono />
               </Field>
             </div>
 
-            <SectionHead hint={mon.name}>Inputs</SectionHead>
+            <SectionHead c={c} hint={mon.name}>Inputs</SectionHead>
             <div style={{ padding: '0 4px' }}>
               {state.sources.map((s, i) => (
-                <Field key={s.port} label={s.port} mono last={i === state.sources.length - 1}>
-                  <Input value={mon.labels[s.port]} onChange={(v) => state.setLabel(s.port, v)} placeholder="Device name" />
+                <Field c={c} key={s.port} label={s.port} mono last={i === state.sources.length - 1}>
+                  <Input c={c} value={mon.labels[s.port]} onChange={(v) => state.setLabel(s.port, v)} placeholder="Device name" />
                 </Field>
               ))}
             </div>
@@ -286,7 +325,7 @@ function SettingsView({ state, theme, themeChoice, setTheme, scope, setScope, pl
           </>
         ) : (
           <>
-            <SectionHead>Appearance</SectionHead>
+            <SectionHead c={c}>Appearance</SectionHead>
             <div style={{ padding: '8px 14px 4px' }}>
               <div style={{
                 display: 'flex', gap: 2, padding: 2,
@@ -307,20 +346,20 @@ function SettingsView({ state, theme, themeChoice, setTheme, scope, setScope, pl
               </div>
             </div>
 
-            <SectionHead>Hotkeys</SectionHead>
+            <SectionHead c={c}>Hotkeys</SectionHead>
             <div style={{ padding: '0 4px' }}>
-              <Field label="Open popup"><span style={{ display: 'flex', gap: 3 }}><Kbd>⌥</Kbd><Kbd>⌘</Kbd><Kbd>M</Kbd></span></Field>
-              <Field label="Cycle input"><span style={{ display: 'flex', gap: 3 }}><Kbd>⌥</Kbd><Kbd>⌘</Kbd><Kbd>S</Kbd></span></Field>
-              <Field label="Toggle power" last><span style={{ opacity: 0.5, fontStyle: 'italic', fontSize: 11 }}>not set</span></Field>
+              <Field c={c} label="Open popup"><span style={{ display: 'flex', gap: 3 }}><Kbd c={c}>⌥</Kbd><Kbd c={c}>⌘</Kbd><Kbd c={c}>M</Kbd></span></Field>
+              <Field c={c} label="Cycle input"><span style={{ display: 'flex', gap: 3 }}><Kbd c={c}>⌥</Kbd><Kbd c={c}>⌘</Kbd><Kbd c={c}>S</Kbd></span></Field>
+              <Field c={c} label="Toggle power" last><span style={{ opacity: 0.5, fontStyle: 'italic', fontSize: 11 }}>not set</span></Field>
             </div>
 
-            <SectionHead>General</SectionHead>
+            <SectionHead c={c}>General</SectionHead>
             <div style={{ padding: '0 4px' }}>
-              <Field label="Launch at login"><Toggle on={launchAtLogin} onToggle={setLaunchAtLogin} /></Field>
-              <Field label={showInLabel} last><Toggle on={showInTray} onToggle={setShowInTray} /></Field>
+              <Field c={c} label="Launch at login"><Toggle c={c} on={launchAtLogin} onToggle={setLaunchAtLogin} /></Field>
+              <Field c={c} label={showInLabel} last><Toggle c={c} on={showInTray} onToggle={setShowInTray} /></Field>
             </div>
 
-            <SectionHead>Backup</SectionHead>
+            <SectionHead c={c}>Backup</SectionHead>
             <input ref={fileInputRef} type="file" accept=".json,application/json" onChange={onFilePicked} style={{ display: 'none' }} />
             <div style={{ padding: '8px 14px 4px', display: 'flex', gap: 8 }}>
               <button onClick={saveConfig} style={{
@@ -414,26 +453,6 @@ export function PopupStrip({ state, theme, themeChoice, setTheme, platform = 'ma
   const surface      = dark ? 'rgba(28,28,32,0.94)' : 'rgba(255,255,255,0.96)';
   const headerBorder = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)';
 
-  const Cell = ({ id, label, onClick, children, danger, isActive }) => {
-    const pressed = flash === id || isActive;
-    return (
-      <button onClick={onClick} style={{
-        flex: 1, height: 52, border: 'none', cursor: 'pointer',
-        background: pressed
-          ? (danger ? 'rgba(255,69,58,0.18)' : (dark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)'))
-          : 'transparent',
-        color: danger ? '#ff5b54' : ink,
-        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3,
-        fontFamily: 'inherit', fontSize: 9.5, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase',
-        borderRight: `1px solid ${dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}`,
-        transition: 'background 120ms ease',
-      }}>
-        {children}
-        <span>{label}</span>
-      </button>
-    );
-  };
-
   return (
     <div style={{ padding: `${PAD_TOP}px ${PAD_X}px ${PAD_BOTTOM}px` }}>
     <div ref={cardRef} style={{
@@ -498,19 +517,22 @@ export function PopupStrip({ state, theme, themeChoice, setTheme, platform = 'ma
       {view === 'controls' ? (
         <>
           <div style={{ display: 'flex' }}>
-            <Cell id="source" label="Source" onClick={press.source} isActive={sourceMenu}><Icons.Source size={17} /></Cell>
-            <Cell id="up"     label="Up"     onClick={press.up}><Icons.Up size={17} /></Cell>
-            <Cell id="down"   label="Down"   onClick={press.down}><Icons.Down size={17} /></Cell>
-            <Cell id="menu"   label="Menu"   onClick={press.menu}><Icons.Menu size={17} /></Cell>
+            <Cell dark={dark} ink={ink} pressed={flash === 'source' || sourceMenu} label="Source" onPress={press.source}><Icons.Source size={17} /></Cell>
+            <Cell dark={dark} ink={ink} pressed={flash === 'up'}   label="Up"   onPress={press.up}><Icons.Up size={17} /></Cell>
+            <Cell dark={dark} ink={ink} pressed={flash === 'down'} label="Down" onPress={press.down}><Icons.Down size={17} /></Cell>
+            <Cell dark={dark} ink={ink} pressed={flash === 'menu'} label="Menu" onPress={press.menu}><Icons.Menu size={17} /></Cell>
             <div style={{ flex: 1 }}>
-              <button onClick={press.power} style={{
-                width: '100%', height: 52, border: 'none', cursor: 'pointer',
-                background: flash === 'power' ? '#ff453a' : (dark ? 'rgba(255,69,58,0.10)' : 'rgba(255,69,58,0.08)'),
-                color: flash === 'power' ? '#fff' : '#ff5b54',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3,
-                fontFamily: 'inherit', fontSize: 9.5, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
-                transition: 'background 120ms ease',
-              }}>
+              <button
+                onPointerDown={press.power}
+                onClick={(e) => { if (e.detail === 0) press.power(); }}
+                style={{
+                  width: '100%', height: 52, border: 'none', cursor: 'pointer',
+                  background: flash === 'power' ? '#ff453a' : (dark ? 'rgba(255,69,58,0.10)' : 'rgba(255,69,58,0.08)'),
+                  color: flash === 'power' ? '#fff' : '#ff5b54',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3,
+                  fontFamily: 'inherit', fontSize: 9.5, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
+                  transition: 'background 120ms ease',
+                }}>
                 <Icons.Power size={17} />
                 <span>Power</span>
               </button>
