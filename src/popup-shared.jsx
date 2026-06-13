@@ -189,10 +189,7 @@ export function useMonitorState() {
     source: () => {
       if (!mon.power) return;
       flashBtn('source');
-      markCmd('INPUT');
-      showToast('Input → monitor');
-      setSourceMenu(false);
-      httpPress('/switch/input/turn_on');
+      setSourceMenu((o) => !o);
     },
     selectSource: (i) => {
       const s = sources[i];
