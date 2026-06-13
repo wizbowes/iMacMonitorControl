@@ -19,6 +19,14 @@ async function invoke(cmd, args = {}) {
   return null;
 }
 
+// POST to the monitor's HTTP API (ESPHome or compatible).
+// Rejects with an Error if ip is empty or the request fails.
+export async function monitorPost(ip, path) {
+  if (!ip) throw new Error('No IP address configured for this monitor');
+  const res = await fetch(`http://${ip}${path}`, { method: 'POST' });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+}
+
 export const backend = {
   power:         (on)    => invoke('cmd_power',          { on }),
   selectSource:  (port)  => invoke('cmd_select_source',  { port }),
