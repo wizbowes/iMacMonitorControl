@@ -30,4 +30,7 @@ export const backend = {
   loadConfig:    ()      => invoke('cmd_load_config'),
   saveConfig:    (config)=> invoke('cmd_save_config',    { config }),
   resizeWindow:  (width, height) => invoke('cmd_resize_window', { width, height }),
+  haGetState:    (url, token, entityId) => invoke('cmd_ha_get_state',    { url, token, entityId }),
+  haSetState:    (url, token, entityId, on) => invoke('cmd_ha_set_state', { url, token, entityId, on }),
+  haListEntities:(url, token)            => invoke('cmd_ha_list_entities', { url, token }),
 };

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { Icons, MonitorTabs, Toast, PORTS } from './popup-shared.jsx';
 import { backend } from './bridge.js';
 
@@ -206,6 +206,150 @@ function Cell({ dark, ink, pressed, danger, label, onPress, children }) {
   );
 }
 
+// ─── HA: Light button (header pill) ──────────────────────────────────────────
+function LightButton({ dark, on, unavailable, friendlyName, onToggle }) {
+  const amber  = '#ffb340';
+  const bg     = on ? (dark ? 'rgba(255,179,64,0.18)' : 'rgba(255,179,64,0.13)') : (dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)');
+  const border = on ? 'rgba(255,179,64,0.36)' : (dark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)');
+  const color  = unavailable ? (dark ? 'rgba(255,255,255,0.28)' : 'rgba(0,0,0,0.28)') : (on ? amber : (dark ? 'rgba(255,255,255,0.50)' : 'rgba(0,0,0,0.45)'));
+  return (
+    <button
+      onPointerDown={unavailable ? undefined : onToggle}
+      onClick={(e) => { if (!unavailable && e.detail === 0) onToggle(); }}
+      title={`${friendlyName}${unavailable ? ' · unavailable' : (on ? ' · on' : ' · off')}`}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5,
+        padding: '3px 8px 3px 7px', flexShrink: 0, maxWidth: 116,
+        background: bg, border: `1px solid ${border}`, borderRadius: 999,
+        color, cursor: unavailable ? 'default' : 'pointer',
+        transition: 'all 160ms ease', fontFamily: 'inherit',
+        fontSize: 10.5, fontWeight: 600, letterSpacing: '0.01em',
+      }}>
+      <span style={{
+        width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
+        background: on ? amber : (dark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.20)'),
+        boxShadow: on ? `0 0 6px ${amber}bb` : 'none',
+        transition: 'all 160ms ease',
+      }} />
+      <Icons.Bulb size={11} />
+      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {friendlyName || 'Light'}
+      </span>
+    </button>
+  );
+}
+
+// ─── HA: Token input with show/hide ──────────────────────────────────────────
+function HaTokenInput({ c, value, onChange }) {
+  const [show, setShow] = useState(false);
+  return (
+    <div style={{ flex: 1, display: 'flex', gap: 4, minWidth: 0 }}>
+      <input
+        type={show ? 'text' : 'password'}
+        value={value || ''} onChange={(e) => onChange(e.target.value)}
+        placeholder="Long-lived access token"
+        spellCheck={false} autoCorrect="off" autoCapitalize="off" autoComplete="off"
+        style={{
+          flex: 1, minWidth: 0, padding: '5px 9px', borderRadius: 6,
+          background: c.fieldBg, border: `1px solid ${c.fieldBorder}`,
+          color: c.ink, fontFamily: '"JetBrains Mono", ui-monospace, monospace',
+          fontSize: 10, outline: 'none', textAlign: 'left',
+        }}
+        onFocus={(e) => e.currentTarget.style.borderColor = '#0a84ff'}
+        onBlur={(e) => e.currentTarget.style.borderColor = c.fieldBorder}
+      />
+      <button
+        onClick={() => setShow((s) => !s)}
+        title={show ? 'Hide token' : 'Show token'}
+        style={{
+          padding: '5px 8px', borderRadius: 6, flexShrink: 0, lineHeight: 0,
+          background: c.fieldBg, border: `1px solid ${c.fieldBorder}`,
+          color: c.muted, cursor: 'pointer',
+        }}>
+        {show ? <Icons.EyeOff size={13} /> : <Icons.Eye size={13} />}
+      </button>
+    </div>
+  );
+}
+
+// ─── HA: Entity autocomplete ──────────────────────────────────────────────────
+function EntityAutocomplete({ c, entityId, onChange, entities, onLoad, loading }) {
+  const [open,  setOpen]  = useState(false);
+  const [query, setQuery] = useState(entityId || '');
+
+  useEffect(() => { setQuery(entityId || ''); }, [entityId]);
+
+  const filtered = useMemo(() => {
+    const q = query.toLowerCase();
+    if (!q) return entities.slice(0, 10);
+    return entities
+      .filter((e) => e.entity_id.toLowerCase().includes(q) || e.friendly_name.toLowerCase().includes(q))
+      .slice(0, 10);
+  }, [query, entities]);
+
+  const select = (e) => {
+    onChange(e.entity_id);
+    setQuery(e.entity_id);
+    setOpen(false);
+  };
+
+  return (
+    <div style={{ width: '100%' }}>
+      <div style={{ display: 'flex', gap: 4 }}>
+        <input
+          value={query}
+          onChange={(e) => { setQuery(e.target.value); onChange(e.target.value); setOpen(true); }}
+          onFocus={(e) => { e.currentTarget.style.borderColor = '#0a84ff'; setOpen(true); }}
+          onBlur={(e) => { e.currentTarget.style.borderColor = c.fieldBorder; setTimeout(() => setOpen(false), 130); }}
+          placeholder="light.desk_lamp"
+          spellCheck={false} autoCorrect="off" autoCapitalize="off" autoComplete="off"
+          style={{
+            flex: 1, minWidth: 0, padding: '5px 9px', borderRadius: 6,
+            background: c.fieldBg, border: `1px solid ${c.fieldBorder}`,
+            color: c.ink, fontFamily: '"JetBrains Mono", ui-monospace, monospace',
+            fontSize: 11, outline: 'none', textAlign: 'left',
+          }}
+        />
+        <button
+          onClick={onLoad} disabled={loading}
+          title={entities.length ? `${entities.length} entities loaded — click to refresh` : 'Load entities from Home Assistant'}
+          style={{
+            padding: '5px 9px', borderRadius: 6, flexShrink: 0, lineHeight: 0,
+            background: entities.length ? 'rgba(61,220,142,0.10)' : c.fieldBg,
+            border: `1px solid ${entities.length ? 'rgba(61,220,142,0.28)' : c.fieldBorder}`,
+            color: entities.length ? '#3ddc8e' : c.muted,
+            cursor: loading ? 'default' : 'pointer', fontFamily: 'inherit',
+            fontSize: 11, fontWeight: 600, minWidth: 32, textAlign: 'center',
+          }}>
+          {loading ? '…' : entities.length ? `${entities.length}` : <Icons.Search size={12} />}
+        </button>
+      </div>
+      {open && filtered.length > 0 && (
+        <div style={{
+          marginTop: 4, borderRadius: 8, overflow: 'hidden',
+          background: c.dark ? 'rgba(26,26,32,0.99)' : 'rgba(251,251,253,0.99)',
+          border: `1px solid ${c.fieldBorder}`,
+          boxShadow: '0 4px 16px rgba(0,0,0,0.14)',
+        }}>
+          {filtered.map((e) => (
+            <button key={e.entity_id} onMouseDown={() => select(e)} style={{
+              display: 'block', width: '100%', padding: '7px 10px',
+              border: 'none', background: 'transparent', textAlign: 'left',
+              cursor: 'pointer', fontFamily: 'inherit',
+              borderBottom: `1px solid ${c.fieldBorder}`,
+            }}
+            onMouseEnter={(ev) => ev.currentTarget.style.background = c.dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)'}
+            onMouseLeave={(ev) => ev.currentTarget.style.background = 'transparent'}>
+              <div style={{ fontSize: 11.5, fontWeight: 600, color: c.ink }}>{e.friendly_name}</div>
+              <div style={{ fontSize: 10, color: c.muted, fontFamily: '"JetBrains Mono", monospace' }}>{e.entity_id}</div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Settings view ────────────────────────────────────────────────────────────
 function SettingsView({ state, theme, themeChoice, setTheme, scope, setScope, platform = 'mac' }) {
   const c = palette(theme === 'dark');
@@ -222,6 +366,7 @@ function SettingsView({ state, theme, themeChoice, setTheme, scope, setScope, pl
       savedAt: new Date().toISOString(),
       theme:   themeChoice,
       monitors: state.monitors.map((m) => ({ name: m.name, ip: m.ip, labels: m.labels })),
+      ...(state.haConfig.url && { ha: state.haConfig }),
     };
     // Persist via Tauri backend (writes to app config dir).
     backend.saveConfig(config)
@@ -360,6 +505,34 @@ function SettingsView({ state, theme, themeChoice, setTheme, scope, setScope, pl
               <Field c={c} label={showInLabel} last><Toggle c={c} on={showInTray} onToggle={setShowInTray} /></Field>
             </div>
 
+            <SectionHead c={c}>Home Assistant</SectionHead>
+            <div style={{ padding: '0 4px' }}>
+              <Field c={c} label="URL">
+                <Input c={c} value={state.haConfig.url} onChange={(v) => state.setHaConfig({ url: v })} placeholder="http://homeassistant.local:8123" />
+              </Field>
+              <Field c={c} label="Token">
+                <HaTokenInput c={c} value={state.haConfig.token} onChange={(v) => state.setHaConfig({ token: v })} />
+              </Field>
+              <div style={{ padding: '9px 14px 10px', borderBottom: `1px solid ${c.rowBorder}` }}>
+                <div style={{ fontSize: 11.5, color: c.ink, marginBottom: 6 }}>Entity</div>
+                <EntityAutocomplete
+                  c={c}
+                  entityId={state.haConfig.entityId}
+                  onChange={(v) => state.setHaConfig({ entityId: v })}
+                  entities={state.haEntities}
+                  onLoad={state.loadHaEntities}
+                  loading={state.haLoading}
+                />
+                {state.haState && (
+                  <div style={{
+                    marginTop: 6, fontSize: 10.5, color: state.haState === 'unavailable' ? '#ff5b54' : state.haState === 'on' ? '#ffb340' : c.muted,
+                  }}>
+                    {state.haState === 'unavailable' ? 'Cannot reach entity' : `${state.haFriendly} · ${state.haState}`}
+                  </div>
+                )}
+              </div>
+            </div>
+
             <SectionHead c={c}>Backup</SectionHead>
             <input ref={fileInputRef} type="file" accept=".json,application/json" onChange={onFilePicked} style={{ display: 'none' }} />
             <div style={{ padding: '8px 14px 4px', display: 'flex', gap: 8 }}>
@@ -481,6 +654,15 @@ export function PopupStrip({ state, theme, themeChoice, setTheme, platform = 'ma
       }}>
         {view === 'controls' ? (
           <>
+            {state.haConfigured && (
+              <LightButton
+                dark={dark}
+                on={state.haState === 'on'}
+                unavailable={!state.haState || state.haState === 'unavailable'}
+                friendlyName={state.haFriendly}
+                onToggle={state.toggleHa}
+              />
+            )}
             {monitors.length === 1 ? (
               <span style={{ fontSize: 12.5, fontWeight: 700, flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {mon.name}

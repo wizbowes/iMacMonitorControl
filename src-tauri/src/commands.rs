@@ -115,6 +115,102 @@ pub fn cmd_save_config(config: AppConfig) -> CmdResult {
     config::save(&config).map_err(CmdError)
 }
 
+// ── Home Assistant integration ────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct HaApiAttributes {
+    friendly_name: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct HaApiState {
+    entity_id: String,
+    state:     String,
+    attributes: HaApiAttributes,
+}
+
+#[derive(Serialize)]
+pub struct HaEntityState {
+    pub state:         String,
+    pub friendly_name: String,
+}
+
+#[derive(Serialize)]
+pub struct HaEntity {
+    pub entity_id:     String,
+    pub friendly_name: String,
+}
+
+#[tauri::command]
+pub async fn cmd_ha_get_state(url: String, token: String, entity_id: String) -> CmdResult<HaEntityState> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .build()?;
+    let resp = client
+        .get(format!("{}/api/states/{}", url.trim_end_matches('/'), entity_id))
+        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", "application/json")
+        .send()
+        .await?;
+    if !resp.status().is_success() {
+        return Err(CmdError(format!("HA error {}", resp.status())));
+    }
+    let body: HaApiState = resp.json().await?;
+    Ok(HaEntityState {
+        friendly_name: body.attributes.friendly_name.unwrap_or_else(|| entity_id.clone()),
+        state: body.state,
+    })
+}
+
+#[tauri::command]
+pub async fn cmd_ha_set_state(url: String, token: String, entity_id: String, on: bool) -> CmdResult {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .build()?;
+    let service = if on { "turn_on" } else { "turn_off" };
+    let resp = client
+        .post(format!("{}/api/services/homeassistant/{}", url.trim_end_matches('/'), service))
+        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", "application/json")
+        .json(&serde_json::json!({ "entity_id": entity_id }))
+        .send()
+        .await?;
+    if !resp.status().is_success() {
+        return Err(CmdError(format!("HA error {}", resp.status())));
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn cmd_ha_list_entities(url: String, token: String) -> CmdResult<Vec<HaEntity>> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()?;
+    let resp = client
+        .get(format!("{}/api/states", url.trim_end_matches('/')))
+        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", "application/json")
+        .send()
+        .await?;
+    if !resp.status().is_success() {
+        return Err(CmdError(format!("HA error {}", resp.status())));
+    }
+    let states: Vec<HaApiState> = resp.json().await?;
+    let mut result: Vec<HaEntity> = states
+        .into_iter()
+        .filter(|s| {
+            let domain = s.entity_id.split('.').next().unwrap_or("");
+            matches!(domain, "light" | "switch" | "group" | "input_boolean")
+        })
+        .map(|s| HaEntity {
+            friendly_name: s.attributes.friendly_name.unwrap_or_else(|| s.entity_id.clone()),
+            entity_id: s.entity_id,
+        })
+        .collect();
+    result.sort_by(|a, b| a.friendly_name.cmp(&b.friendly_name));
+    Ok(result)
+}
+
 /// Resize the popup to fit its content (called by the frontend whenever the
 /// rendered card changes height), then re-anchor it to the tray icon so it
 /// grows downward from the menubar on macOS and upward from the taskbar on

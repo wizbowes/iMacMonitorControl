@@ -67,6 +67,9 @@ export const Icons = {
   Battery: (p) => <Stroke {...p}><rect x="2.5" y="8" width="16" height="8" rx="1.4" /><path d="M19.5 11 V13" /><rect x="4.5" y="10" width="9" height="4" fill="currentColor" stroke="none" /></Stroke>,
   Search:  (p) => <Stroke {...p}><circle cx="10.5" cy="10.5" r="5.5" /><path d="M14.5 14.5 L19 19" /></Stroke>,
   Cube:    (p) => <Stroke {...p}><path d="M12 3 L20 7 V17 L12 21 L4 17 V7 Z" /><path d="M4 7 L12 11 L20 7" /><path d="M12 11 V21" /></Stroke>,
+  Bulb:    (p) => <Stroke {...p}><path d="M9 18h6M9.5 21h5" /><path d="M9.7 14A5.5 5.5 0 1 1 14.3 14L14 17H10L9.7 14z" /></Stroke>,
+  Eye:     (p) => <Stroke {...p}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></Stroke>,
+  EyeOff:  (p) => <Stroke {...p}><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" /><path d="M1 1l22 22" /></Stroke>,
 };
 
 // ───────────────────────── State ─────────────────────────
@@ -104,6 +107,12 @@ export function useMonitorState() {
   const [flash,     setFlash]     = useState(null);
   const [toast,     setToast]     = useState(null);
 
+  const [haConfig,   setHaConfig_]  = useState({ url: '', token: '', entityId: '' });
+  const [haState,    setHaState]    = useState(null);
+  const [haFriendly, setHaFriendly] = useState('Light');
+  const [haEntities, setHaEntities] = useState([]);
+  const [haLoading,  setHaLoading]  = useState(false);
+
   const mon = monitors.find((m) => m.id === activeId) || monitors[0];
   const sources = PORTS.map((p) => ({ port: p, device: (mon.labels || {})[p] || null }));
 
@@ -125,8 +134,31 @@ export function useMonitorState() {
         setMonitors(fresh);
         setActiveId(fresh[0].id);
       }
+      if (cfg && cfg.ha) {
+        setHaConfig_({ url: cfg.ha.url || '', token: cfg.ha.token || '', entityId: cfg.ha.entityId || '' });
+      }
     }).catch(() => {/* no saved config yet — use seed */});
   }, []);
+
+  // Poll HA entity state every 2.5s whenever all credentials are set.
+  const haConfigured = !!(haConfig.url && haConfig.token && haConfig.entityId);
+  useEffect(() => {
+    if (!haConfigured) { setHaState(null); return; }
+    let cancelled = false;
+    async function poll() {
+      try {
+        const r = await backend.haGetState(haConfig.url, haConfig.token, haConfig.entityId);
+        if (cancelled) return;
+        setHaState(r.state);
+        if (r.friendly_name) setHaFriendly(r.friendly_name);
+      } catch {
+        if (!cancelled) setHaState('unavailable');
+      }
+    }
+    poll();
+    const id = setInterval(poll, 2500);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [haConfigured, haConfig.url, haConfig.token, haConfig.entityId]);
 
   const updateMonitor = (id, patch) =>
     setMonitors((ms) => ms.map((m) => (m.id === id ? { ...m, ...patch } : m)));
@@ -219,6 +251,30 @@ export function useMonitorState() {
     },
   };
 
+  const setHaConfig = useCallback((patch) => {
+    setHaConfig_((prev) => ({ ...prev, ...patch }));
+  }, []);
+
+  const toggleHa = useCallback(() => {
+    if (!haConfigured) return;
+    const nextOn = haState !== 'on';
+    setHaState(nextOn ? 'on' : 'off');
+    backend.haSetState(haConfig.url, haConfig.token, haConfig.entityId, nextOn)
+      .catch(() => setHaState(haState));
+  }, [haConfigured, haState, haConfig]);
+
+  const loadHaEntities = useCallback(async () => {
+    if (!haConfig.url || !haConfig.token) return;
+    setHaLoading(true);
+    try {
+      const list = await backend.haListEntities(haConfig.url, haConfig.token);
+      setHaEntities(list || []);
+    } catch {
+      // leave existing list intact
+    }
+    setHaLoading(false);
+  }, [haConfig.url, haConfig.token]);
+
   return {
     monitors, activeId, setActiveId, mon,
     addMonitor, removeMonitor, updateMonitor, replaceMonitors,
@@ -226,6 +282,10 @@ export function useMonitorState() {
     sourceMenu, setSourceMenu,
     flash, toast,
     press,
+    haConfig, setHaConfig, haConfigured,
+    haState, haFriendly,
+    haEntities, haLoading, loadHaEntities,
+    toggleHa,
   };
 }
 

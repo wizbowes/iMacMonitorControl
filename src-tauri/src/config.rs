@@ -9,12 +9,22 @@ pub struct MonitorConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HaConfig {
+    pub url:   String,
+    pub token: String,
+    #[serde(rename = "entityId", default)]
+    pub entity_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     pub version:  u32,
     #[serde(rename = "savedAt")]
     pub saved_at: String,
     pub theme:    String,
     pub monitors: Vec<MonitorConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ha: Option<HaConfig>,
 }
 
 impl Default for AppConfig {
@@ -28,6 +38,7 @@ impl Default for AppConfig {
                 ip:     "192.168.1.21".to_string(),
                 labels: HashMap::new(),
             }],
+            ha: None,
         }
     }
 }

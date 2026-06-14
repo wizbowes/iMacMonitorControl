@@ -33,6 +33,9 @@ pub fn run() {
             commands::cmd_load_config,
             commands::cmd_save_config,
             commands::cmd_resize_window,
+            commands::cmd_ha_get_state,
+            commands::cmd_ha_set_state,
+            commands::cmd_ha_list_entities,
         ])
         .setup(|app| {
             tray::setup_tray(&app.handle())?;
