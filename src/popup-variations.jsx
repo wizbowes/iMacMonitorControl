@@ -630,6 +630,8 @@ export function PopupStrip({ state, theme, themeChoice, setTheme, platform = 'ma
   const [view,  setView]  = useState('controls');
   const [scope, setScope] = useState('monitor');
   const cardRef = useRef(null);
+  const pressRef = useRef(press);
+  useEffect(() => { pressRef.current = press; });
 
   // Keep the native window sized to the rendered card. ResizeObserver fires on
   // mount and whenever the card's height changes (settings open/close, source
@@ -655,13 +657,13 @@ export function PopupStrip({ state, theme, themeChoice, setTheme, platform = 'ma
   useEffect(() => {
     if (view !== 'controls') return;
     const onKey = (e) => {
-      if (e.key === 'ArrowUp')    { e.preventDefault(); press.up();   }
-      if (e.key === 'ArrowDown')  { e.preventDefault(); press.down(); }
-      if (e.key === 'ArrowRight') { e.preventDefault(); press.menu(); }
+      if (e.key === 'ArrowUp')    { e.preventDefault(); pressRef.current.up();   }
+      if (e.key === 'ArrowDown')  { e.preventDefault(); pressRef.current.down(); }
+      if (e.key === 'ArrowRight') { e.preventDefault(); pressRef.current.menu(); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [view, press]);
+  }, [view]);
 
   const ink          = dark ? '#f4f4f6' : '#1a1a1f';
   const muted        = dark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)';
