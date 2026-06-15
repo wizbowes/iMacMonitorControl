@@ -9,6 +9,7 @@ pub fn setup_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
 
     TrayIconBuilder::with_id("main")
         .icon(icon)
+        .icon_as_template(true)
         .tooltip("iMac Monitor Control")
         .on_tray_icon_event(|tray, event| {
             if let TrayIconEvent::Click {
@@ -100,8 +101,8 @@ pub fn position_near_tray<R: Runtime>(
     let _ = window.set_position(tauri::LogicalPosition::new(x, y));
 }
 
-fn load_tray_icon<R: Runtime>(app: &AppHandle<R>) -> Image<'static> {
-    app.default_window_icon()
-        .map(|img| img.clone().to_owned())
-        .unwrap_or_else(|| Image::new_owned(vec![], 0, 0))
+fn load_tray_icon<R: Runtime>(_app: &AppHandle<R>) -> Image<'static> {
+    Image::from_bytes(include_bytes!("../icons/tray.png"))
+        .map(|img| img.to_owned())
+        .unwrap_or_else(|_| Image::new_owned(vec![], 0, 0))
 }

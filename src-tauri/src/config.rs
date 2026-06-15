@@ -9,25 +9,42 @@ pub struct MonitorConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HaConfig {
+    pub url:   String,
+    pub token: String,
+    #[serde(default)]
+    pub entities: Vec<String>,
+    // Migrate single-entity saves from an older version
+    #[serde(rename = "entityId", default, skip_serializing)]
+    entity_id_legacy: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     pub version:  u32,
     #[serde(rename = "savedAt")]
     pub saved_at: String,
     pub theme:    String,
     pub monitors: Vec<MonitorConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ha: Option<HaConfig>,
+    #[serde(rename = "hideDockIcon", default)]
+    pub hide_dock_icon: bool,
 }
 
 impl Default for AppConfig {
     fn default() -> Self {
         AppConfig {
-            version:  1,
-            saved_at: String::new(),
-            theme:    "auto".to_string(),
-            monitors: vec![MonitorConfig {
+            version:       1,
+            saved_at:      String::new(),
+            theme:         "auto".to_string(),
+            monitors:      vec![MonitorConfig {
                 name:   "iMac".to_string(),
                 ip:     "192.168.1.21".to_string(),
                 labels: HashMap::new(),
             }],
+            ha:            None,
+            hide_dock_icon: false,
         }
     }
 }
@@ -41,10 +58,17 @@ pub fn config_path() -> PathBuf {
 
 pub fn load() -> AppConfig {
     let path = config_path();
-    std::fs::read_to_string(&path)
+    let mut cfg: AppConfig = std::fs::read_to_string(&path)
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_default()
+        .unwrap_or_default();
+    // Migrate a single entityId from an older save into the entities array.
+    if let Some(ha) = &mut cfg.ha {
+        if ha.entities.is_empty() && !ha.entity_id_legacy.is_empty() {
+            ha.entities.push(ha.entity_id_legacy.clone());
+        }
+    }
+    cfg
 }
 
 pub fn save(config: &AppConfig) -> Result<(), String> {

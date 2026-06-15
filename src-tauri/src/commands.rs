@@ -115,6 +115,149 @@ pub fn cmd_save_config(config: AppConfig) -> CmdResult {
     config::save(&config).map_err(CmdError)
 }
 
+// ── Home Assistant integration ────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct HaApiAttributes {
+    friendly_name: Option<String>,
+    icon:          Option<String>,
+}
+
+#[derive(Deserialize)]
+struct HaApiState {
+    entity_id: String,
+    state:     String,
+    attributes: HaApiAttributes,
+}
+
+#[derive(Serialize)]
+pub struct HaEntityState {
+    pub state:         String,
+    pub friendly_name: String,
+    pub icon:          Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct HaEntity {
+    pub entity_id:     String,
+    pub friendly_name: String,
+}
+
+#[tauri::command]
+pub async fn cmd_ha_get_state(url: String, token: String, entity_id: String) -> CmdResult<HaEntityState> {
+    let url   = url.trim().trim_end_matches('/').to_string();
+    let token = token.trim().to_string();
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .build()?;
+    let resp = client
+        .get(format!("{}/api/states/{}", url, entity_id))
+        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", "application/json")
+        .send()
+        .await?;
+    if !resp.status().is_success() {
+        return Err(CmdError(format!("HA {} on get_state", resp.status())));
+    }
+    let body: HaApiState = resp.json().await?;
+    Ok(HaEntityState {
+        friendly_name: body.attributes.friendly_name.unwrap_or_else(|| entity_id.clone()),
+        state: body.state,
+        icon:  body.attributes.icon,
+    })
+}
+
+#[tauri::command]
+pub async fn cmd_ha_set_state(url: String, token: String, entity_id: String, on: bool) -> CmdResult {
+    let url   = url.trim().trim_end_matches('/').to_string();
+    let token = token.trim().to_string();
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .build()?;
+    // Use the entity's own domain service; scenes/scripts are always turn_on only.
+    let domain  = entity_id.split('.').next().unwrap_or("homeassistant");
+    let service = match domain {
+        "scene" | "script" => format!("{}/turn_on", domain),
+        _                  => format!("{}/{}", domain, if on { "turn_on" } else { "turn_off" }),
+    };
+    let resp = client
+        .post(format!("{}/api/services/{}", url, service))
+        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", "application/json")
+        .json(&serde_json::json!({ "entity_id": entity_id }))
+        .send()
+        .await?;
+    if !resp.status().is_success() {
+        return Err(CmdError(format!("HA {} calling {}", resp.status(), service)));
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn cmd_ha_list_entities(url: String, token: String) -> CmdResult<Vec<HaEntity>> {
+    let url   = url.trim().trim_end_matches('/').to_string();
+    let token = token.trim().to_string();
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()?;
+    let resp = client
+        .get(format!("{}/api/states", url))
+        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", "application/json")
+        .send()
+        .await?;
+    if !resp.status().is_success() {
+        return Err(CmdError(format!("HA {} on list_entities", resp.status())));
+    }
+    let states: Vec<HaApiState> = resp.json().await?;
+    let mut result: Vec<HaEntity> = states
+        .into_iter()
+        .filter(|s| {
+            let domain = s.entity_id.split('.').next().unwrap_or("");
+            matches!(domain, "light" | "switch" | "scene" | "script" | "group" | "input_boolean")
+        })
+        .map(|s| HaEntity {
+            friendly_name: s.attributes.friendly_name.unwrap_or_else(|| s.entity_id.clone()),
+            entity_id: s.entity_id,
+        })
+        .collect();
+    result.sort_by(|a, b| a.friendly_name.cmp(&b.friendly_name));
+    Ok(result)
+}
+
+/// Press a button component on an ESPHome device via its native HTTP API.
+/// Component names (e.g. "power", "up", "down", "menu") must match the `id`
+/// in the ESPHome YAML.  No auth is required unless the device is configured
+/// with api_encryption / api_password.
+#[tauri::command]
+pub async fn cmd_esphome_press(ip: String, component: String) -> CmdResult {
+    let ip = ip.trim().to_string();
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .build()?;
+    let url = format!("http://{}/button/{}/press", ip, component);
+    let resp = client.post(&url).send().await?;
+    if !resp.status().is_success() {
+        return Err(CmdError(format!("ESPHome {} ({})", resp.status(), url)));
+    }
+    Ok(())
+}
+
+/// Hide or show the app in the macOS Dock (no-op on other platforms).
+#[tauri::command]
+pub fn cmd_set_dock_hidden(app: tauri::AppHandle, hide: bool) -> CmdResult {
+    #[cfg(target_os = "macos")]
+    {
+        let policy = if hide {
+            tauri::ActivationPolicy::Accessory
+        } else {
+            tauri::ActivationPolicy::Regular
+        };
+        app.set_activation_policy(policy).map_err(|e| CmdError(e.to_string()))?;
+    }
+    Ok(())
+}
+
 /// Resize the popup to fit its content (called by the frontend whenever the
 /// rendered card changes height), then re-anchor it to the tray icon so it
 /// grows downward from the menubar on macOS and upward from the taskbar on

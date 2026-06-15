@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { backend } from './bridge.js';
+import { backend, monitorPost } from './bridge.js';
 
 // ───────────────────────── Icons (1.6px strokes, original) ─────────────────────────
 const Stroke = (props) => (
@@ -67,6 +67,9 @@ export const Icons = {
   Battery: (p) => <Stroke {...p}><rect x="2.5" y="8" width="16" height="8" rx="1.4" /><path d="M19.5 11 V13" /><rect x="4.5" y="10" width="9" height="4" fill="currentColor" stroke="none" /></Stroke>,
   Search:  (p) => <Stroke {...p}><circle cx="10.5" cy="10.5" r="5.5" /><path d="M14.5 14.5 L19 19" /></Stroke>,
   Cube:    (p) => <Stroke {...p}><path d="M12 3 L20 7 V17 L12 21 L4 17 V7 Z" /><path d="M4 7 L12 11 L20 7" /><path d="M12 11 V21" /></Stroke>,
+  Bulb:    (p) => <Stroke {...p}><path d="M9 18h6M9.5 21h5" /><path d="M9.7 14A5.5 5.5 0 1 1 14.3 14L14 17H10L9.7 14z" /></Stroke>,
+  Eye:     (p) => <Stroke {...p}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></Stroke>,
+  EyeOff:  (p) => <Stroke {...p}><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" /><path d="M1 1l22 22" /></Stroke>,
 };
 
 // ───────────────────────── State ─────────────────────────
@@ -104,6 +107,14 @@ export function useMonitorState() {
   const [flash,     setFlash]     = useState(null);
   const [toast,     setToast]     = useState(null);
 
+  const [haConfig,      setHaConfig_]     = useState({ url: '', token: '', entities: [] });
+  const [haEntityStates,setHaEntityStates]= useState({});
+  const [haEntities,    setHaEntities]    = useState([]);
+  const [haLoading,     setHaLoading]     = useState(false);
+  const [hideDockIcon,  setHideDockIcon_] = useState(false);
+
+  const pendingToggleRef = useRef(new Set());
+
   const mon = monitors.find((m) => m.id === activeId) || monitors[0];
   const sources = PORTS.map((p) => ({ port: p, device: (mon.labels || {})[p] || null }));
 
@@ -125,8 +136,44 @@ export function useMonitorState() {
         setMonitors(fresh);
         setActiveId(fresh[0].id);
       }
+      if (cfg && cfg.ha) {
+        setHaConfig_({ url: cfg.ha.url || '', token: cfg.ha.token || '', entities: cfg.ha.entities || [] });
+      }
+      if (cfg && typeof cfg.hideDockIcon === 'boolean') {
+        setHideDockIcon_(cfg.hideDockIcon);
+      }
     }).catch(() => {/* no saved config yet — use seed */});
   }, []);
+
+  // Poll all configured HA entity states every 2.5s.
+  const haConfigured = !!(haConfig.url && haConfig.token && haConfig.entities?.length);
+  useEffect(() => {
+    const { url, token, entities = [] } = haConfig;
+    if (!url || !token || !entities.length) { setHaEntityStates({}); return; }
+    let cancelled = false;
+    async function poll() {
+      const results = await Promise.allSettled(
+        entities.map((id) => backend.haGetState(url, token, id))
+      );
+      if (cancelled) return;
+      setHaEntityStates((prev) => {
+        const next = { ...prev };
+        entities.forEach((id, i) => {
+          if (pendingToggleRef.current.has(id)) return;
+          const r = results[i];
+          if (r.status === 'fulfilled') {
+            next[id] = { state: r.value.state, friendlyName: r.value.friendly_name || id, icon: r.value.icon || null };
+          } else {
+            next[id] = { ...(prev[id] || {}), state: 'unavailable' };
+          }
+        });
+        return next;
+      });
+    }
+    poll();
+    const timer = setInterval(poll, 2500);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [haConfig.url, haConfig.token, haConfig.entities]);
 
   const updateMonitor = (id, patch) =>
     setMonitors((ms) => ms.map((m) => (m.id === id ? { ...m, ...patch } : m)));
@@ -164,15 +211,18 @@ export function useMonitorState() {
     return true;
   };
 
-  const flashBtn = (id) => {
+  const flashBtn = useCallback((id) => {
     setFlash(id);
     setTimeout(() => setFlash((f) => (f === id ? null : f)), 240);
-  };
-  const showToast = (text) => {
+  }, []);
+  const showToast = useCallback((text) => {
     setToast({ text, at: Date.now() });
-    setTimeout(() => setToast((t) => (t && t.text === text ? null : t)), 1400);
-  };
+    setTimeout(() => setToast((t) => (t && t.text === text ? null : t)), 3000);
+  }, []);
   const markCmd = (cmd) => patchActive({ lastCmd: cmd, lastCmdAt: Date.now() });
+
+  const httpPress = (path) =>
+    monitorPost(mon.ip, path).catch((e) => showToast(`Error: ${e.message}`));
 
   const press = {
     power: () => {
@@ -181,7 +231,7 @@ export function useMonitorState() {
       patchActive({ power: nextOn, lastCmd: nextOn ? 'POWER ON' : 'STANDBY', lastCmdAt: Date.now() });
       showToast(nextOn ? 'Powering on' : 'Standby');
       setSourceMenu(false);
-      backend.power(nextOn).catch((e) => showToast(`Error: ${e}`));
+      httpPress('/switch/source_switch/toggle');
     },
     source: () => {
       if (!mon.power) return;
@@ -193,7 +243,6 @@ export function useMonitorState() {
       patchActive({ lastSourceSent: i, lastCmd: `SRC → ${s.port.toUpperCase()}`, lastCmdAt: Date.now() });
       showToast(`Switching to ${sourceLabel(s)}`);
       setSourceMenu(false);
-      backend.selectSource(s.port).catch((e) => showToast(`Error: ${e}`));
     },
     menu: () => {
       if (!mon.power) return;
@@ -201,23 +250,68 @@ export function useMonitorState() {
       markCmd('MENU');
       showToast('Menu → monitor');
       setSourceMenu(false);
-      backend.openMenu().catch((e) => showToast(`Error: ${e}`));
+      httpPress('/switch/menu/turn_on');
     },
     up: () => {
       if (!mon.power) return;
       flashBtn('up');
       markCmd('UP');
       showToast('Up → monitor');
-      backend.navUp().catch((e) => showToast(`Error: ${e}`));
+      httpPress('/switch/up/turn_on');
     },
     down: () => {
       if (!mon.power) return;
       flashBtn('down');
       markCmd('DOWN');
       showToast('Down → monitor');
-      backend.navDown().catch((e) => showToast(`Error: ${e}`));
+      httpPress('/switch/down/turn_on');
     },
   };
+
+  const setHaConfig = useCallback((patch) => {
+    setHaConfig_((prev) => ({ ...prev, ...patch }));
+  }, []);
+
+  const addHaEntity    = useCallback(() => setHaConfig_((p) => ({ ...p, entities: [...(p.entities || []), ''] })), []);
+  const removeHaEntity = useCallback((i) => setHaConfig_((p) => ({ ...p, entities: (p.entities || []).filter((_, j) => j !== i) })), []);
+  const updateHaEntity = useCallback((i, val) => setHaConfig_((p) => {
+    const next = [...(p.entities || [])];
+    next[i] = val;
+    return { ...p, entities: next };
+  }), []);
+
+  const toggleHa = useCallback((entityId) => {
+    const cur = haEntityStates[entityId];
+    const nextOn = !cur || cur.state !== 'on';
+    pendingToggleRef.current.add(entityId);
+    setHaEntityStates((prev) => ({ ...prev, [entityId]: { ...(prev[entityId] || {}), state: nextOn ? 'on' : 'off' } }));
+    backend.haSetState(haConfig.url, haConfig.token, entityId, nextOn)
+      .then(() => {
+        setTimeout(() => pendingToggleRef.current.delete(entityId), 3000);
+      })
+      .catch((e) => {
+        pendingToggleRef.current.delete(entityId);
+        setHaEntityStates((prev) => ({ ...prev, [entityId]: { ...(prev[entityId] || {}), state: cur?.state || 'off' } }));
+        showToast(`HA: ${String(e).replace(/^Error:\s*/i, '').slice(0, 55)}`);
+      });
+  }, [haEntityStates, haConfig.url, haConfig.token, showToast]);
+
+  const loadHaEntities = useCallback(async () => {
+    if (!haConfig.url || !haConfig.token) return;
+    setHaLoading(true);
+    try {
+      const list = await backend.haListEntities(haConfig.url, haConfig.token);
+      setHaEntities(list || []);
+    } catch (e) {
+      showToast(`HA list: ${String(e).replace(/^Error:\s*/i, '').slice(0, 50)}`);
+    }
+    setHaLoading(false);
+  }, [haConfig.url, haConfig.token, showToast]);
+
+  const setHideDockIcon = useCallback((hide) => {
+    setHideDockIcon_(hide);
+    backend.setDockHidden(hide).catch(() => {});
+  }, []);
 
   return {
     monitors, activeId, setActiveId, mon,
@@ -226,6 +320,12 @@ export function useMonitorState() {
     sourceMenu, setSourceMenu,
     flash, toast,
     press,
+    haConfig, setHaConfig, haConfigured,
+    addHaEntity, removeHaEntity, updateHaEntity,
+    haEntityStates,
+    haEntities, haLoading, loadHaEntities,
+    toggleHa,
+    hideDockIcon, setHideDockIcon,
   };
 }
 
