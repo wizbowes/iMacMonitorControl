@@ -401,7 +401,7 @@ function SettingsView({ state, theme, themeChoice, setTheme, scope, setScope, pl
   return (
     <div style={{ color: ink, animation: 'mc-view-in 160ms ease-out' }}>
       <ScopeSwitch c={c} scope={scope} setScope={setScope} />
-      <div className="mc-settings-scroll" style={{ maxHeight: 520, overflowY: 'auto' }}>
+      <div className="mc-settings-scroll" style={{ overflowY: 'visible' }}>
         {scope === 'monitor' && monitors.length > 1 && (
           <div style={{ padding: '10px 12px 0' }}>
             <MonitorTabs monitors={monitors} activeId={activeId} onChange={state.setActiveId} theme={theme} />
@@ -680,10 +680,6 @@ export function PopupStrip({ state, theme, themeChoice, setTheme, platform = 'ma
     }}>
       <style>{`
         .mc-tabs::-webkit-scrollbar { display: none; }
-        .mc-settings-scroll::-webkit-scrollbar { width: 8px; }
-        .mc-settings-scroll::-webkit-scrollbar-thumb { background: ${dark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)'}; border-radius: 4px; border: 2px solid transparent; background-clip: padding-box; }
-        .mc-settings-scroll::-webkit-scrollbar-thumb:hover { background: ${dark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.22)'}; background-clip: padding-box; border: 2px solid transparent; }
-        .mc-settings-scroll::-webkit-scrollbar-track { background: transparent; }
         @keyframes mc-toast-in { from { opacity: 0; transform: translateX(-50%) translateY(4px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
         @keyframes mc-view-in  { from { opacity: 0; } to { opacity: 1; } }
       `}</style>
