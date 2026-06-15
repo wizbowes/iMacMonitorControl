@@ -649,6 +649,20 @@ export function PopupStrip({ state, theme, themeChoice, setTheme, platform = 'ma
     return () => ro.disconnect();
   }, []);
 
+  // Arrow-key bindings when the controls view is open and focused.
+  // ArrowUp/Down → OSD navigate; ArrowRight → open OSD menu.
+  // Only active in controls view to avoid hijacking settings inputs.
+  useEffect(() => {
+    if (view !== 'controls') return;
+    const onKey = (e) => {
+      if (e.key === 'ArrowUp')    { e.preventDefault(); press.up();   }
+      if (e.key === 'ArrowDown')  { e.preventDefault(); press.down(); }
+      if (e.key === 'ArrowRight') { e.preventDefault(); press.menu(); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [view, press]);
+
   const ink          = dark ? '#f4f4f6' : '#1a1a1f';
   const muted        = dark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)';
   const surface      = dark ? 'rgba(28,28,32,0.94)' : 'rgba(255,255,255,0.96)';
