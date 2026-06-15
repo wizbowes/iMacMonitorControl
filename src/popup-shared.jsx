@@ -221,6 +221,10 @@ export function useMonitorState() {
   }, []);
   const markCmd = (cmd) => patchActive({ lastCmd: cmd, lastCmdAt: Date.now() });
 
+  // Route control commands: ESPHome HTTP API when the monitor has an IP,
+  // DDC/CI (m1ddc) otherwise.
+  const esp = mon.ip ? (component) => backend.espHomePress(mon.ip, component) : null;
+
   const press = {
     power: () => {
       flashBtn('power');
@@ -228,7 +232,8 @@ export function useMonitorState() {
       patchActive({ power: nextOn, lastCmd: nextOn ? 'POWER ON' : 'STANDBY', lastCmdAt: Date.now() });
       showToast(nextOn ? 'Powering on' : 'Standby');
       setSourceMenu(false);
-      backend.power(nextOn).catch((e) => showToast(`Error: ${e}`));
+      (esp ? esp('power') : backend.power(nextOn))
+        .catch((e) => showToast(`Error: ${e}`));
     },
     source: () => {
       if (!mon.power) return;
@@ -240,7 +245,8 @@ export function useMonitorState() {
       patchActive({ lastSourceSent: i, lastCmd: `SRC → ${s.port.toUpperCase()}`, lastCmdAt: Date.now() });
       showToast(`Switching to ${sourceLabel(s)}`);
       setSourceMenu(false);
-      backend.selectSource(s.port).catch((e) => showToast(`Error: ${e}`));
+      (esp ? esp('source') : backend.selectSource(s.port))
+        .catch((e) => showToast(`Error: ${e}`));
     },
     menu: () => {
       if (!mon.power) return;
@@ -248,21 +254,24 @@ export function useMonitorState() {
       markCmd('MENU');
       showToast('Menu → monitor');
       setSourceMenu(false);
-      backend.openMenu().catch((e) => showToast(`Error: ${e}`));
+      (esp ? esp('menu') : backend.openMenu())
+        .catch((e) => showToast(`Error: ${e}`));
     },
     up: () => {
       if (!mon.power) return;
       flashBtn('up');
       markCmd('UP');
       showToast('Up → monitor');
-      backend.navUp().catch((e) => showToast(`Error: ${e}`));
+      (esp ? esp('up') : backend.navUp())
+        .catch((e) => showToast(`Error: ${e}`));
     },
     down: () => {
       if (!mon.power) return;
       flashBtn('down');
       markCmd('DOWN');
       showToast('Down → monitor');
-      backend.navDown().catch((e) => showToast(`Error: ${e}`));
+      (esp ? esp('down') : backend.navDown())
+        .catch((e) => showToast(`Error: ${e}`));
     },
   };
 

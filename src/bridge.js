@@ -33,5 +33,6 @@ export const backend = {
   haGetState:    (url, token, entityId) => invoke('cmd_ha_get_state',    { url, token, entityId }),
   haSetState:    (url, token, entityId, on) => invoke('cmd_ha_set_state', { url, token, entityId, on }),
   haListEntities:(url, token)            => invoke('cmd_ha_list_entities', { url, token }),
-  setDockHidden: (hide)                  => invoke('cmd_set_dock_hidden',  { hide }),
+  setDockHidden:   (hide)                     => invoke('cmd_set_dock_hidden',   { hide }),
+  espHomePress:    (ip, component)            => invoke('cmd_esphome_press',     { ip, component }),
 };

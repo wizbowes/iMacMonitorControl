@@ -222,6 +222,24 @@ pub async fn cmd_ha_list_entities(url: String, token: String) -> CmdResult<Vec<H
     Ok(result)
 }
 
+/// Press a button component on an ESPHome device via its native HTTP API.
+/// Component names (e.g. "power", "up", "down", "menu") must match the `id`
+/// in the ESPHome YAML.  No auth is required unless the device is configured
+/// with api_encryption / api_password.
+#[tauri::command]
+pub async fn cmd_esphome_press(ip: String, component: String) -> CmdResult {
+    let ip = ip.trim().to_string();
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .build()?;
+    let url = format!("http://{}/button/{}/press", ip, component);
+    let resp = client.post(&url).send().await?;
+    if !resp.status().is_success() {
+        return Err(CmdError(format!("ESPHome {} ({})", resp.status(), url)));
+    }
+    Ok(())
+}
+
 /// Hide or show the app in the macOS Dock (no-op on other platforms).
 #[tauri::command]
 pub fn cmd_set_dock_hidden(app: tauri::AppHandle, hide: bool) -> CmdResult {
