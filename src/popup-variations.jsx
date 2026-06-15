@@ -673,9 +673,10 @@ export function PopupStrip({ state, theme, themeChoice, setTheme, platform = 'ma
   useEffect(() => {
     if (view !== 'controls') return;
     const onKey = (e) => {
-      if (e.key === 'ArrowUp')    { e.preventDefault(); pressRef.current.up();   }
-      if (e.key === 'ArrowDown')  { e.preventDefault(); pressRef.current.down(); }
-      if (e.key === 'ArrowRight') { e.preventDefault(); pressRef.current.menu(); }
+      if (e.key === 'ArrowUp')    { e.preventDefault(); pressRef.current.up();     }
+      if (e.key === 'ArrowDown')  { e.preventDefault(); pressRef.current.down();   }
+      if (e.key === 'ArrowRight') { e.preventDefault(); pressRef.current.menu();   }
+      if (e.key === 'ArrowLeft')  { e.preventDefault(); pressRef.current.source(); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);

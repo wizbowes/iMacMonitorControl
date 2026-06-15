@@ -236,7 +236,8 @@ export function useMonitorState() {
     source: () => {
       if (!mon.power) return;
       flashBtn('source');
-      setSourceMenu((o) => !o);
+      showToast('Source → monitor');
+      httpPress('/switch/source/turn_on');
     },
     selectSource: (i) => {
       const s = sources[i];
