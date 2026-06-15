@@ -113,6 +113,8 @@ export function useMonitorState() {
   const [haLoading,     setHaLoading]     = useState(false);
   const [hideDockIcon,  setHideDockIcon_] = useState(false);
 
+  const pendingToggleRef = useRef(new Set());
+
   const mon = monitors.find((m) => m.id === activeId) || monitors[0];
   const sources = PORTS.map((p) => ({ port: p, device: (mon.labels || {})[p] || null }));
 
@@ -157,6 +159,7 @@ export function useMonitorState() {
       setHaEntityStates((prev) => {
         const next = { ...prev };
         entities.forEach((id, i) => {
+          if (pendingToggleRef.current.has(id)) return;
           const r = results[i];
           if (r.status === 'fulfilled') {
             next[id] = { state: r.value.state, friendlyName: r.value.friendly_name || id };
@@ -214,7 +217,7 @@ export function useMonitorState() {
   }, []);
   const showToast = useCallback((text) => {
     setToast({ text, at: Date.now() });
-    setTimeout(() => setToast((t) => (t && t.text === text ? null : t)), 1400);
+    setTimeout(() => setToast((t) => (t && t.text === text ? null : t)), 3000);
   }, []);
   const markCmd = (cmd) => patchActive({ lastCmd: cmd, lastCmdAt: Date.now() });
 
@@ -278,9 +281,14 @@ export function useMonitorState() {
   const toggleHa = useCallback((entityId) => {
     const cur = haEntityStates[entityId];
     const nextOn = !cur || cur.state !== 'on';
+    pendingToggleRef.current.add(entityId);
     setHaEntityStates((prev) => ({ ...prev, [entityId]: { ...(prev[entityId] || {}), state: nextOn ? 'on' : 'off' } }));
     backend.haSetState(haConfig.url, haConfig.token, entityId, nextOn)
+      .then(() => {
+        setTimeout(() => pendingToggleRef.current.delete(entityId), 3000);
+      })
       .catch((e) => {
+        pendingToggleRef.current.delete(entityId);
         setHaEntityStates((prev) => ({ ...prev, [entityId]: { ...(prev[entityId] || {}), state: cur?.state || 'off' } }));
         showToast(`HA: ${String(e).replace(/^Error:\s*/i, '').slice(0, 55)}`);
       });
