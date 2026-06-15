@@ -36,8 +36,15 @@ pub fn run() {
             commands::cmd_ha_get_state,
             commands::cmd_ha_set_state,
             commands::cmd_ha_list_entities,
+            commands::cmd_set_dock_hidden,
         ])
         .setup(|app| {
+            // Apply persisted dock-visibility preference before the window shows.
+            let cfg = config::load();
+            if cfg.hide_dock_icon {
+                #[cfg(target_os = "macos")]
+                let _ = app.handle().set_activation_policy(tauri::ActivationPolicy::Accessory);
+            }
             tray::setup_tray(&app.handle())?;
             // Re-assert no native shadow: the config flag alone has been seen
             // to leave the macOS 26 glass rim around the borderless window.

@@ -356,6 +356,7 @@ function SettingsView({ state, theme, themeChoice, setTheme, scope, setScope, pl
       savedAt: new Date().toISOString(),
       theme:   themeChoice,
       monitors: state.monitors.map((m) => ({ name: m.name, ip: m.ip, labels: m.labels })),
+      hideDockIcon: state.hideDockIcon,
       ...(state.haConfig.url && { ha: state.haConfig }),
     };
     // Persist via Tauri backend (writes to app config dir).
@@ -492,7 +493,8 @@ function SettingsView({ state, theme, themeChoice, setTheme, scope, setScope, pl
             <SectionHead c={c}>General</SectionHead>
             <div style={{ padding: '0 4px' }}>
               <Field c={c} label="Launch at login"><Toggle c={c} on={launchAtLogin} onToggle={setLaunchAtLogin} /></Field>
-              <Field c={c} label={showInLabel} last><Toggle c={c} on={showInTray} onToggle={setShowInTray} /></Field>
+              <Field c={c} label={showInLabel}><Toggle c={c} on={showInTray} onToggle={setShowInTray} /></Field>
+              <Field c={c} label="Hide from Dock" last><Toggle c={c} on={state.hideDockIcon} onToggle={state.setHideDockIcon} /></Field>
             </div>
 
             <SectionHead c={c}>Home Assistant</SectionHead>

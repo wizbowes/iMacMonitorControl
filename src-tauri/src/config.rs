@@ -28,20 +28,23 @@ pub struct AppConfig {
     pub monitors: Vec<MonitorConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ha: Option<HaConfig>,
+    #[serde(rename = "hideDockIcon", default)]
+    pub hide_dock_icon: bool,
 }
 
 impl Default for AppConfig {
     fn default() -> Self {
         AppConfig {
-            version:  1,
-            saved_at: String::new(),
-            theme:    "auto".to_string(),
-            monitors: vec![MonitorConfig {
+            version:       1,
+            saved_at:      String::new(),
+            theme:         "auto".to_string(),
+            monitors:      vec![MonitorConfig {
                 name:   "iMac".to_string(),
                 ip:     "192.168.1.21".to_string(),
                 labels: HashMap::new(),
             }],
-            ha: None,
+            ha:            None,
+            hide_dock_icon: false,
         }
     }
 }

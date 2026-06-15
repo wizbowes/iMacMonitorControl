@@ -111,6 +111,7 @@ export function useMonitorState() {
   const [haEntityStates,setHaEntityStates]= useState({});
   const [haEntities,    setHaEntities]    = useState([]);
   const [haLoading,     setHaLoading]     = useState(false);
+  const [hideDockIcon,  setHideDockIcon_] = useState(false);
 
   const mon = monitors.find((m) => m.id === activeId) || monitors[0];
   const sources = PORTS.map((p) => ({ port: p, device: (mon.labels || {})[p] || null }));
@@ -135,6 +136,9 @@ export function useMonitorState() {
       }
       if (cfg && cfg.ha) {
         setHaConfig_({ url: cfg.ha.url || '', token: cfg.ha.token || '', entities: cfg.ha.entities || [] });
+      }
+      if (cfg && typeof cfg.hideDockIcon === 'boolean') {
+        setHideDockIcon_(cfg.hideDockIcon);
       }
     }).catch(() => {/* no saved config yet — use seed */});
   }, []);
@@ -204,14 +208,14 @@ export function useMonitorState() {
     return true;
   };
 
-  const flashBtn = (id) => {
+  const flashBtn = useCallback((id) => {
     setFlash(id);
     setTimeout(() => setFlash((f) => (f === id ? null : f)), 240);
-  };
-  const showToast = (text) => {
+  }, []);
+  const showToast = useCallback((text) => {
     setToast({ text, at: Date.now() });
     setTimeout(() => setToast((t) => (t && t.text === text ? null : t)), 1400);
-  };
+  }, []);
   const markCmd = (cmd) => patchActive({ lastCmd: cmd, lastCmdAt: Date.now() });
 
   const press = {
@@ -276,8 +280,11 @@ export function useMonitorState() {
     const nextOn = !cur || cur.state !== 'on';
     setHaEntityStates((prev) => ({ ...prev, [entityId]: { ...(prev[entityId] || {}), state: nextOn ? 'on' : 'off' } }));
     backend.haSetState(haConfig.url, haConfig.token, entityId, nextOn)
-      .catch(() => setHaEntityStates((prev) => ({ ...prev, [entityId]: { ...(prev[entityId] || {}), state: cur?.state || 'off' } })));
-  }, [haEntityStates, haConfig.url, haConfig.token]);
+      .catch((e) => {
+        setHaEntityStates((prev) => ({ ...prev, [entityId]: { ...(prev[entityId] || {}), state: cur?.state || 'off' } }));
+        showToast(`HA: ${String(e).replace(/^Error:\s*/i, '').slice(0, 55)}`);
+      });
+  }, [haEntityStates, haConfig.url, haConfig.token, showToast]);
 
   const loadHaEntities = useCallback(async () => {
     if (!haConfig.url || !haConfig.token) return;
@@ -285,11 +292,16 @@ export function useMonitorState() {
     try {
       const list = await backend.haListEntities(haConfig.url, haConfig.token);
       setHaEntities(list || []);
-    } catch {
-      // leave existing list intact
+    } catch (e) {
+      showToast(`HA list: ${String(e).replace(/^Error:\s*/i, '').slice(0, 50)}`);
     }
     setHaLoading(false);
-  }, [haConfig.url, haConfig.token]);
+  }, [haConfig.url, haConfig.token, showToast]);
+
+  const setHideDockIcon = useCallback((hide) => {
+    setHideDockIcon_(hide);
+    backend.setDockHidden(hide).catch(() => {});
+  }, []);
 
   return {
     monitors, activeId, setActiveId, mon,
@@ -303,6 +315,7 @@ export function useMonitorState() {
     haEntityStates,
     haEntities, haLoading, loadHaEntities,
     toggleHa,
+    hideDockIcon, setHideDockIcon,
   };
 }
 

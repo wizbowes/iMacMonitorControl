@@ -143,17 +143,19 @@ pub struct HaEntity {
 
 #[tauri::command]
 pub async fn cmd_ha_get_state(url: String, token: String, entity_id: String) -> CmdResult<HaEntityState> {
+    let url   = url.trim().trim_end_matches('/').to_string();
+    let token = token.trim().to_string();
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(5))
         .build()?;
     let resp = client
-        .get(format!("{}/api/states/{}", url.trim_end_matches('/'), entity_id))
+        .get(format!("{}/api/states/{}", url, entity_id))
         .header("Authorization", format!("Bearer {}", token))
         .header("Content-Type", "application/json")
         .send()
         .await?;
     if !resp.status().is_success() {
-        return Err(CmdError(format!("HA error {}", resp.status())));
+        return Err(CmdError(format!("HA {} on get_state", resp.status())));
     }
     let body: HaApiState = resp.json().await?;
     Ok(HaEntityState {
@@ -164,43 +166,52 @@ pub async fn cmd_ha_get_state(url: String, token: String, entity_id: String) -> 
 
 #[tauri::command]
 pub async fn cmd_ha_set_state(url: String, token: String, entity_id: String, on: bool) -> CmdResult {
+    let url   = url.trim().trim_end_matches('/').to_string();
+    let token = token.trim().to_string();
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(5))
         .build()?;
-    let service = if on { "turn_on" } else { "turn_off" };
+    // Use the entity's own domain service; scenes/scripts are always turn_on only.
+    let domain  = entity_id.split('.').next().unwrap_or("homeassistant");
+    let service = match domain {
+        "scene" | "script" => format!("{}/turn_on", domain),
+        _                  => format!("{}/{}", domain, if on { "turn_on" } else { "turn_off" }),
+    };
     let resp = client
-        .post(format!("{}/api/services/homeassistant/{}", url.trim_end_matches('/'), service))
+        .post(format!("{}/api/services/{}", url, service))
         .header("Authorization", format!("Bearer {}", token))
         .header("Content-Type", "application/json")
         .json(&serde_json::json!({ "entity_id": entity_id }))
         .send()
         .await?;
     if !resp.status().is_success() {
-        return Err(CmdError(format!("HA error {}", resp.status())));
+        return Err(CmdError(format!("HA {} calling {}", resp.status(), service)));
     }
     Ok(())
 }
 
 #[tauri::command]
 pub async fn cmd_ha_list_entities(url: String, token: String) -> CmdResult<Vec<HaEntity>> {
+    let url   = url.trim().trim_end_matches('/').to_string();
+    let token = token.trim().to_string();
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
         .build()?;
     let resp = client
-        .get(format!("{}/api/states", url.trim_end_matches('/')))
+        .get(format!("{}/api/states", url))
         .header("Authorization", format!("Bearer {}", token))
         .header("Content-Type", "application/json")
         .send()
         .await?;
     if !resp.status().is_success() {
-        return Err(CmdError(format!("HA error {}", resp.status())));
+        return Err(CmdError(format!("HA {} on list_entities", resp.status())));
     }
     let states: Vec<HaApiState> = resp.json().await?;
     let mut result: Vec<HaEntity> = states
         .into_iter()
         .filter(|s| {
             let domain = s.entity_id.split('.').next().unwrap_or("");
-            matches!(domain, "light" | "switch" | "group" | "input_boolean")
+            matches!(domain, "light" | "switch" | "scene" | "script" | "group" | "input_boolean")
         })
         .map(|s| HaEntity {
             friendly_name: s.attributes.friendly_name.unwrap_or_else(|| s.entity_id.clone()),
@@ -209,6 +220,21 @@ pub async fn cmd_ha_list_entities(url: String, token: String) -> CmdResult<Vec<H
         .collect();
     result.sort_by(|a, b| a.friendly_name.cmp(&b.friendly_name));
     Ok(result)
+}
+
+/// Hide or show the app in the macOS Dock (no-op on other platforms).
+#[tauri::command]
+pub fn cmd_set_dock_hidden(app: tauri::AppHandle, hide: bool) -> CmdResult {
+    #[cfg(target_os = "macos")]
+    {
+        let policy = if hide {
+            tauri::ActivationPolicy::Accessory
+        } else {
+            tauri::ActivationPolicy::Regular
+        };
+        app.set_activation_policy(policy).map_err(|e| CmdError(e.to_string()))?;
+    }
+    Ok(())
 }
 
 /// Resize the popup to fit its content (called by the frontend whenever the
