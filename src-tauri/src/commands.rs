@@ -120,6 +120,7 @@ pub fn cmd_save_config(config: AppConfig) -> CmdResult {
 #[derive(Deserialize)]
 struct HaApiAttributes {
     friendly_name: Option<String>,
+    icon:          Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -133,6 +134,7 @@ struct HaApiState {
 pub struct HaEntityState {
     pub state:         String,
     pub friendly_name: String,
+    pub icon:          Option<String>,
 }
 
 #[derive(Serialize)]
@@ -161,6 +163,7 @@ pub async fn cmd_ha_get_state(url: String, token: String, entity_id: String) -> 
     Ok(HaEntityState {
         friendly_name: body.attributes.friendly_name.unwrap_or_else(|| entity_id.clone()),
         state: body.state,
+        icon:  body.attributes.icon,
     })
 }
 

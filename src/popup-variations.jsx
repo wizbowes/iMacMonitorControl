@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
+import * as mdiIcons from '@mdi/js';
 import { Icons, MonitorTabs, Toast, PORTS } from './popup-shared.jsx';
 import { backend } from './bridge.js';
 
@@ -207,7 +208,20 @@ function Cell({ dark, ink, pressed, danger, label, onPress, children }) {
 }
 
 // ─── HA: Entity row cell ─────────────────────────────────────────────────────
-// Filled house SVG (the HA brand icon shape), inherits currentColor.
+
+// Render an MDI icon by its "mdi:xxx" name using the bundled @mdi/js paths.
+function MdiIcon({ icon, size = 16 }) {
+  const key = 'mdi' + icon.replace(/^mdi:/, '').replace(/-([a-z])/g, (_, c) => c.toUpperCase()).replace(/^([a-z])/, (_, c) => c.toUpperCase());
+  const path = mdiIcons[key];
+  if (!path) return null;
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor" aria-hidden="true">
+      <path d={path} />
+    </svg>
+  );
+}
+
+// Filled house SVG fallback (the HA brand icon shape), inherits currentColor.
 function HaIcon({ size = 16 }) {
   return (
     <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor" aria-hidden="true">
@@ -239,7 +253,7 @@ function HaEntityCell({ dark, ink, entityId, haState, onToggle, isLast }) {
         transition: 'background 120ms ease, color 120ms ease',
         maxWidth: '100%', overflow: 'hidden',
       }}>
-      <HaIcon size={16} />
+      {haState?.icon ? <MdiIcon icon={haState.icon} size={16} /> : <HaIcon size={16} />}
       <span style={{
         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         maxWidth: 'calc(100% - 8px)', display: 'block',

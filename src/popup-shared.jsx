@@ -162,7 +162,7 @@ export function useMonitorState() {
           if (pendingToggleRef.current.has(id)) return;
           const r = results[i];
           if (r.status === 'fulfilled') {
-            next[id] = { state: r.value.state, friendlyName: r.value.friendly_name || id };
+            next[id] = { state: r.value.state, friendlyName: r.value.friendly_name || id, icon: r.value.icon || null };
           } else {
             next[id] = { ...(prev[id] || {}), state: 'unavailable' };
           }
