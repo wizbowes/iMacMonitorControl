@@ -107,11 +107,10 @@ export function useMonitorState() {
   const [flash,     setFlash]     = useState(null);
   const [toast,     setToast]     = useState(null);
 
-  const [haConfig,   setHaConfig_]  = useState({ url: '', token: '', entityId: '' });
-  const [haState,    setHaState]    = useState(null);
-  const [haFriendly, setHaFriendly] = useState('Light');
-  const [haEntities, setHaEntities] = useState([]);
-  const [haLoading,  setHaLoading]  = useState(false);
+  const [haConfig,      setHaConfig_]     = useState({ url: '', token: '', entities: [] });
+  const [haEntityStates,setHaEntityStates]= useState({});
+  const [haEntities,    setHaEntities]    = useState([]);
+  const [haLoading,     setHaLoading]     = useState(false);
 
   const mon = monitors.find((m) => m.id === activeId) || monitors[0];
   const sources = PORTS.map((p) => ({ port: p, device: (mon.labels || {})[p] || null }));
@@ -135,30 +134,39 @@ export function useMonitorState() {
         setActiveId(fresh[0].id);
       }
       if (cfg && cfg.ha) {
-        setHaConfig_({ url: cfg.ha.url || '', token: cfg.ha.token || '', entityId: cfg.ha.entityId || '' });
+        setHaConfig_({ url: cfg.ha.url || '', token: cfg.ha.token || '', entities: cfg.ha.entities || [] });
       }
     }).catch(() => {/* no saved config yet — use seed */});
   }, []);
 
-  // Poll HA entity state every 2.5s whenever all credentials are set.
-  const haConfigured = !!(haConfig.url && haConfig.token && haConfig.entityId);
+  // Poll all configured HA entity states every 2.5s.
+  const haConfigured = !!(haConfig.url && haConfig.token && haConfig.entities?.length);
   useEffect(() => {
-    if (!haConfigured) { setHaState(null); return; }
+    const { url, token, entities = [] } = haConfig;
+    if (!url || !token || !entities.length) { setHaEntityStates({}); return; }
     let cancelled = false;
     async function poll() {
-      try {
-        const r = await backend.haGetState(haConfig.url, haConfig.token, haConfig.entityId);
-        if (cancelled) return;
-        setHaState(r.state);
-        if (r.friendly_name) setHaFriendly(r.friendly_name);
-      } catch {
-        if (!cancelled) setHaState('unavailable');
-      }
+      const results = await Promise.allSettled(
+        entities.map((id) => backend.haGetState(url, token, id))
+      );
+      if (cancelled) return;
+      setHaEntityStates((prev) => {
+        const next = { ...prev };
+        entities.forEach((id, i) => {
+          const r = results[i];
+          if (r.status === 'fulfilled') {
+            next[id] = { state: r.value.state, friendlyName: r.value.friendly_name || id };
+          } else {
+            next[id] = { ...(prev[id] || {}), state: 'unavailable' };
+          }
+        });
+        return next;
+      });
     }
     poll();
-    const id = setInterval(poll, 2500);
-    return () => { cancelled = true; clearInterval(id); };
-  }, [haConfigured, haConfig.url, haConfig.token, haConfig.entityId]);
+    const timer = setInterval(poll, 2500);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [haConfig.url, haConfig.token, haConfig.entities]);
 
   const updateMonitor = (id, patch) =>
     setMonitors((ms) => ms.map((m) => (m.id === id ? { ...m, ...patch } : m)));
@@ -255,13 +263,21 @@ export function useMonitorState() {
     setHaConfig_((prev) => ({ ...prev, ...patch }));
   }, []);
 
-  const toggleHa = useCallback(() => {
-    if (!haConfigured) return;
-    const nextOn = haState !== 'on';
-    setHaState(nextOn ? 'on' : 'off');
-    backend.haSetState(haConfig.url, haConfig.token, haConfig.entityId, nextOn)
-      .catch(() => setHaState(haState));
-  }, [haConfigured, haState, haConfig]);
+  const addHaEntity    = useCallback(() => setHaConfig_((p) => ({ ...p, entities: [...(p.entities || []), ''] })), []);
+  const removeHaEntity = useCallback((i) => setHaConfig_((p) => ({ ...p, entities: (p.entities || []).filter((_, j) => j !== i) })), []);
+  const updateHaEntity = useCallback((i, val) => setHaConfig_((p) => {
+    const next = [...(p.entities || [])];
+    next[i] = val;
+    return { ...p, entities: next };
+  }), []);
+
+  const toggleHa = useCallback((entityId) => {
+    const cur = haEntityStates[entityId];
+    const nextOn = !cur || cur.state !== 'on';
+    setHaEntityStates((prev) => ({ ...prev, [entityId]: { ...(prev[entityId] || {}), state: nextOn ? 'on' : 'off' } }));
+    backend.haSetState(haConfig.url, haConfig.token, entityId, nextOn)
+      .catch(() => setHaEntityStates((prev) => ({ ...prev, [entityId]: { ...(prev[entityId] || {}), state: cur?.state || 'off' } })));
+  }, [haEntityStates, haConfig.url, haConfig.token]);
 
   const loadHaEntities = useCallback(async () => {
     if (!haConfig.url || !haConfig.token) return;
@@ -283,7 +299,8 @@ export function useMonitorState() {
     flash, toast,
     press,
     haConfig, setHaConfig, haConfigured,
-    haState, haFriendly,
+    addHaEntity, removeHaEntity, updateHaEntity,
+    haEntityStates,
     haEntities, haLoading, loadHaEntities,
     toggleHa,
   };

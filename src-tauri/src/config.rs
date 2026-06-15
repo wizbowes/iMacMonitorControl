@@ -12,8 +12,11 @@ pub struct MonitorConfig {
 pub struct HaConfig {
     pub url:   String,
     pub token: String,
-    #[serde(rename = "entityId", default)]
-    pub entity_id: String,
+    #[serde(default)]
+    pub entities: Vec<String>,
+    // Migrate single-entity saves from an older version
+    #[serde(rename = "entityId", default, skip_serializing)]
+    entity_id_legacy: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,10 +55,17 @@ pub fn config_path() -> PathBuf {
 
 pub fn load() -> AppConfig {
     let path = config_path();
-    std::fs::read_to_string(&path)
+    let mut cfg: AppConfig = std::fs::read_to_string(&path)
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_default()
+        .unwrap_or_default();
+    // Migrate a single entityId from an older save into the entities array.
+    if let Some(ha) = &mut cfg.ha {
+        if ha.entities.is_empty() && !ha.entity_id_legacy.is_empty() {
+            ha.entities.push(ha.entity_id_legacy.clone());
+        }
+    }
+    cfg
 }
 
 pub fn save(config: &AppConfig) -> Result<(), String> {

@@ -206,35 +206,44 @@ function Cell({ dark, ink, pressed, danger, label, onPress, children }) {
   );
 }
 
-// ─── HA: Light button (header pill) ──────────────────────────────────────────
-function LightButton({ dark, on, unavailable, friendlyName, onToggle }) {
-  const amber  = '#ffb340';
-  const bg     = on ? (dark ? 'rgba(255,179,64,0.18)' : 'rgba(255,179,64,0.13)') : (dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)');
-  const border = on ? 'rgba(255,179,64,0.36)' : (dark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)');
-  const color  = unavailable ? (dark ? 'rgba(255,255,255,0.28)' : 'rgba(0,0,0,0.28)') : (on ? amber : (dark ? 'rgba(255,255,255,0.50)' : 'rgba(0,0,0,0.45)'));
+// ─── HA: Entity row cell ─────────────────────────────────────────────────────
+// Filled house SVG (the HA brand icon shape), inherits currentColor.
+function HaIcon({ size = 16 }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor" aria-hidden="true">
+      <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
+    </svg>
+  );
+}
+
+function HaEntityCell({ dark, ink, entityId, haState, onToggle, isLast }) {
+  const amber = '#ffb340';
+  const on    = haState?.state === 'on';
+  const unavailable = !haState || haState.state === 'unavailable';
+  const label = haState?.friendlyName || entityId.split('.').slice(1).join('.') || entityId;
   return (
     <button
       onPointerDown={unavailable ? undefined : onToggle}
       onClick={(e) => { if (!unavailable && e.detail === 0) onToggle(); }}
-      title={`${friendlyName}${unavailable ? ' · unavailable' : (on ? ' · on' : ' · off')}`}
+      title={`${label} · ${haState?.state || 'loading…'}`}
       style={{
-        display: 'inline-flex', alignItems: 'center', gap: 5,
-        padding: '3px 8px 3px 7px', flexShrink: 0, maxWidth: 116,
-        background: bg, border: `1px solid ${border}`, borderRadius: 999,
-        color, cursor: unavailable ? 'default' : 'pointer',
-        transition: 'all 160ms ease', fontFamily: 'inherit',
-        fontSize: 10.5, fontWeight: 600, letterSpacing: '0.01em',
+        flex: 1, height: 52, border: 'none', cursor: unavailable ? 'default' : 'pointer',
+        background: on ? (dark ? 'rgba(255,179,64,0.14)' : 'rgba(255,179,64,0.10)') : 'transparent',
+        color: unavailable
+          ? (dark ? 'rgba(255,255,255,0.28)' : 'rgba(0,0,0,0.26)')
+          : (on ? amber : ink),
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3,
+        fontFamily: 'inherit', fontSize: 9.5, fontWeight: 600,
+        letterSpacing: '0.01em',
+        borderRight: isLast ? 'none' : `1px solid ${dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}`,
+        transition: 'background 120ms ease, color 120ms ease',
+        maxWidth: '100%', overflow: 'hidden',
       }}>
+      <HaIcon size={16} />
       <span style={{
-        width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
-        background: on ? amber : (dark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.20)'),
-        boxShadow: on ? `0 0 6px ${amber}bb` : 'none',
-        transition: 'all 160ms ease',
-      }} />
-      <Icons.Bulb size={11} />
-      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {friendlyName || 'Light'}
-      </span>
+        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        maxWidth: 'calc(100% - 8px)', display: 'block',
+      }}>{label}</span>
     </button>
   );
 }
@@ -272,8 +281,8 @@ function HaTokenInput({ c, value, onChange }) {
   );
 }
 
-// ─── HA: Entity autocomplete ──────────────────────────────────────────────────
-function EntityAutocomplete({ c, entityId, onChange, entities, onLoad, loading }) {
+// ─── HA: Entity autocomplete (no embedded load button) ───────────────────────
+function EntityAutocomplete({ c, entityId, onChange, entities }) {
   const [open,  setOpen]  = useState(false);
   const [query, setQuery] = useState(entityId || '');
 
@@ -287,43 +296,24 @@ function EntityAutocomplete({ c, entityId, onChange, entities, onLoad, loading }
       .slice(0, 10);
   }, [query, entities]);
 
-  const select = (e) => {
-    onChange(e.entity_id);
-    setQuery(e.entity_id);
-    setOpen(false);
-  };
+  const select = (e) => { onChange(e.entity_id); setQuery(e.entity_id); setOpen(false); };
 
   return (
-    <div style={{ width: '100%' }}>
-      <div style={{ display: 'flex', gap: 4 }}>
-        <input
-          value={query}
-          onChange={(e) => { setQuery(e.target.value); onChange(e.target.value); setOpen(true); }}
-          onFocus={(e) => { e.currentTarget.style.borderColor = '#0a84ff'; setOpen(true); }}
-          onBlur={(e) => { e.currentTarget.style.borderColor = c.fieldBorder; setTimeout(() => setOpen(false), 130); }}
-          placeholder="light.desk_lamp"
-          spellCheck={false} autoCorrect="off" autoCapitalize="off" autoComplete="off"
-          style={{
-            flex: 1, minWidth: 0, padding: '5px 9px', borderRadius: 6,
-            background: c.fieldBg, border: `1px solid ${c.fieldBorder}`,
-            color: c.ink, fontFamily: '"JetBrains Mono", ui-monospace, monospace',
-            fontSize: 11, outline: 'none', textAlign: 'left',
-          }}
-        />
-        <button
-          onClick={onLoad} disabled={loading}
-          title={entities.length ? `${entities.length} entities loaded — click to refresh` : 'Load entities from Home Assistant'}
-          style={{
-            padding: '5px 9px', borderRadius: 6, flexShrink: 0, lineHeight: 0,
-            background: entities.length ? 'rgba(61,220,142,0.10)' : c.fieldBg,
-            border: `1px solid ${entities.length ? 'rgba(61,220,142,0.28)' : c.fieldBorder}`,
-            color: entities.length ? '#3ddc8e' : c.muted,
-            cursor: loading ? 'default' : 'pointer', fontFamily: 'inherit',
-            fontSize: 11, fontWeight: 600, minWidth: 32, textAlign: 'center',
-          }}>
-          {loading ? '…' : entities.length ? `${entities.length}` : <Icons.Search size={12} />}
-        </button>
-      </div>
+    <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
+      <input
+        value={query}
+        onChange={(e) => { setQuery(e.target.value); onChange(e.target.value); setOpen(true); }}
+        onFocus={(e) => { e.currentTarget.style.borderColor = '#0a84ff'; setOpen(true); }}
+        onBlur={(e) => { e.currentTarget.style.borderColor = c.fieldBorder; setTimeout(() => setOpen(false), 130); }}
+        placeholder="light.desk_lamp"
+        spellCheck={false} autoCorrect="off" autoCapitalize="off" autoComplete="off"
+        style={{
+          width: '100%', minWidth: 0, padding: '5px 9px', borderRadius: 6,
+          background: c.fieldBg, border: `1px solid ${c.fieldBorder}`,
+          color: c.ink, fontFamily: '"JetBrains Mono", ui-monospace, monospace',
+          fontSize: 11, outline: 'none', textAlign: 'left', boxSizing: 'border-box',
+        }}
+      />
       {open && filtered.length > 0 && (
         <div style={{
           marginTop: 4, borderRadius: 8, overflow: 'hidden',
@@ -510,27 +500,64 @@ function SettingsView({ state, theme, themeChoice, setTheme, scope, setScope, pl
               <Field c={c} label="URL">
                 <Input c={c} value={state.haConfig.url} onChange={(v) => state.setHaConfig({ url: v })} placeholder="http://homeassistant.local:8123" />
               </Field>
-              <Field c={c} label="Token">
+              <Field c={c} label="Token" last>
                 <HaTokenInput c={c} value={state.haConfig.token} onChange={(v) => state.setHaConfig({ token: v })} />
               </Field>
-              <div style={{ padding: '9px 14px 10px', borderBottom: `1px solid ${c.rowBorder}` }}>
-                <div style={{ fontSize: 11.5, color: c.ink, marginBottom: 6 }}>Entity</div>
-                <EntityAutocomplete
-                  c={c}
-                  entityId={state.haConfig.entityId}
-                  onChange={(v) => state.setHaConfig({ entityId: v })}
-                  entities={state.haEntities}
-                  onLoad={state.loadHaEntities}
-                  loading={state.haLoading}
-                />
-                {state.haState && (
-                  <div style={{
-                    marginTop: 6, fontSize: 10.5, color: state.haState === 'unavailable' ? '#ff5b54' : state.haState === 'on' ? '#ffb340' : c.muted,
+            </div>
+            <div style={{ padding: '6px 14px 12px', borderBottom: `1px solid ${c.rowBorder}` }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: c.muted }}>Entities</span>
+                <button
+                  onClick={state.loadHaEntities} disabled={state.haLoading || !state.haConfig.url || !state.haConfig.token}
+                  title={state.haEntities.length ? `${state.haEntities.length} loaded — refresh` : 'Load entity list from HA'}
+                  style={{
+                    padding: '3px 8px', borderRadius: 6, fontSize: 10.5, fontWeight: 600,
+                    border: `1px solid ${state.haEntities.length ? 'rgba(61,220,142,0.30)' : c.fieldBorder}`,
+                    background: state.haEntities.length ? 'rgba(61,220,142,0.09)' : c.fieldBg,
+                    color: state.haEntities.length ? '#3ddc8e' : c.muted,
+                    cursor: (state.haLoading || !state.haConfig.url || !state.haConfig.token) ? 'default' : 'pointer',
+                    fontFamily: 'inherit',
                   }}>
-                    {state.haState === 'unavailable' ? 'Cannot reach entity' : `${state.haFriendly} · ${state.haState}`}
-                  </div>
-                )}
+                  {state.haLoading ? '…' : state.haEntities.length ? `${state.haEntities.length} loaded` : 'Load entities'}
+                </button>
               </div>
+              {(state.haConfig.entities || []).map((entityId, i) => {
+                const s = state.haEntityStates[entityId];
+                return (
+                  <div key={i} style={{ display: 'flex', gap: 4, alignItems: 'flex-start', marginBottom: i < (state.haConfig.entities.length - 1) ? 6 : 0 }}>
+                    <EntityAutocomplete
+                      c={c}
+                      entityId={entityId}
+                      onChange={(v) => state.updateHaEntity(i, v)}
+                      entities={state.haEntities}
+                    />
+                    {s && (
+                      <span style={{
+                        fontSize: 10, lineHeight: '28px', flexShrink: 0, whiteSpace: 'nowrap',
+                        color: s.state === 'unavailable' ? '#ff5b54' : s.state === 'on' ? '#ffb340' : c.muted,
+                      }}>
+                        {s.state === 'unavailable' ? '✕' : s.state === 'on' ? 'on' : 'off'}
+                      </span>
+                    )}
+                    <button onClick={() => state.removeHaEntity(i)} title="Remove" style={{
+                      padding: '5px 7px', borderRadius: 6, flexShrink: 0, lineHeight: 0,
+                      background: 'transparent', border: `1px solid ${c.fieldBorder}`,
+                      color: '#ff5b54', cursor: 'pointer', fontSize: 12,
+                    }}>×</button>
+                  </div>
+                );
+              })}
+              <button onClick={state.addHaEntity} style={{
+                marginTop: (state.haConfig.entities || []).length ? 8 : 0,
+                width: '100%', padding: '7px', border: `1px dashed ${dark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.18)'}`,
+                background: 'transparent', color: c.muted, borderRadius: 7, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                fontFamily: 'inherit', fontSize: 11.5, fontWeight: 600, transition: 'all 120ms ease',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)'; e.currentTarget.style.borderStyle = 'solid'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderStyle = 'dashed'; }}>
+                <Icons.Plus size={13} /> Add entity
+              </button>
             </div>
 
             <SectionHead c={c}>Backup</SectionHead>
@@ -654,15 +681,6 @@ export function PopupStrip({ state, theme, themeChoice, setTheme, platform = 'ma
       }}>
         {view === 'controls' ? (
           <>
-            {state.haConfigured && (
-              <LightButton
-                dark={dark}
-                on={state.haState === 'on'}
-                unavailable={!state.haState || state.haState === 'unavailable'}
-                friendlyName={state.haFriendly}
-                onToggle={state.toggleHa}
-              />
-            )}
             {monitors.length === 1 ? (
               <span style={{ fontSize: 12.5, fontWeight: 700, flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {mon.name}
@@ -699,6 +717,24 @@ export function PopupStrip({ state, theme, themeChoice, setTheme, platform = 'ma
       {/* Body */}
       {view === 'controls' ? (
         <>
+          {state.haConfigured && (state.haConfig.entities || []).length > 0 && (
+            <div style={{
+              display: 'flex',
+              borderBottom: `1px solid ${dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}`,
+            }}>
+              {(state.haConfig.entities || []).map((entityId, i) => (
+                <HaEntityCell
+                  key={entityId || i}
+                  dark={dark}
+                  ink={ink}
+                  entityId={entityId}
+                  haState={state.haEntityStates[entityId]}
+                  onToggle={() => state.toggleHa(entityId)}
+                  isLast={i === state.haConfig.entities.length - 1}
+                />
+              ))}
+            </div>
+          )}
           <div style={{ display: 'flex' }}>
             <Cell dark={dark} ink={ink} pressed={flash === 'source' || sourceMenu} label="Source" onPress={press.source}><Icons.Source size={17} /></Cell>
             <Cell dark={dark} ink={ink} pressed={flash === 'up'}   label="Up"   onPress={press.up}><Icons.Up size={17} /></Cell>
